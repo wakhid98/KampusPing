@@ -4,13 +4,13 @@ export const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;"
 export const needGate = me => me.lastDone !== wib(0);
 // Gerbang Aksi: dashboard terkunci sampai timer 10 menit selesai + catatan diisi.
 export function runGate(el, uid, me, task, onDone) {
-  let left = 600;
+  let left = (me.prefs?.gateMin || 10) * 60;
   el.hidden = false;
   el.innerHTML = `<div class="gate-card"><h1>Mulai dulu. Dashboard menyusul.</h1>
-  <p class="muted">Satu tugas, 10 menit. Timer berhenti kalau kamu pindah tab.</p>
+  <p class="muted">Satu tugas, ${left / 60} menit. Timer berhenti kalau kamu pindah tab.</p>
   <div class="focus"><b>${esc(task.title)}</b><small>${esc(task.step || "Kerjakan bagian pertama saja")}</small></div>
-  <div class="clock" id="clock">10:00</div>
-  <button class="btn big" id="go">Mulai 10 menit</button>
+  <div class="clock" id="clock">${String(left / 60).padStart(2, "0")}:00</div>
+  <button class="btn big" id="go">Mulai ${left / 60} menit</button>
   <div id="after" hidden style="display:none;gap:12px"><textarea id="note" rows="3" placeholder="Apa yang barusan kamu kerjakan?"></textarea>
   <button class="btn big" id="fin" disabled>Buka dashboard</button></div></div>`;
   const q = s => el.querySelector(s), tick = () => { q("#clock").textContent = `${String(left / 60 | 0).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`; };

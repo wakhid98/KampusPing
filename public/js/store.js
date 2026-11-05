@@ -14,3 +14,4 @@ export const patchItem = (u, id, x) => updateDoc(doc(db, "users", u, "items", id
 export const delItem = (u, id) => deleteDoc(doc(db, "users", u, "items", id));
 export const getMe = async u => (await getDoc(doc(db, "users", u))).data() || {};
 export const patchMe = (u, x) => setDoc(doc(db, "users", u), x, { merge: true });
+export const setItem = (u, id, x) => setDoc(doc(db, "users", u, "items", id), x);
