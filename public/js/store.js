@@ -1,0 +1,16 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { getFirestore, collection, doc, addDoc, getDoc, setDoc, updateDoc, deleteDoc, onSnapshot, arrayUnion } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+export const app = initializeApp(firebaseConfig), auth = getAuth(app), db = getFirestore(app);
+export { arrayUnion };
+export const login = () => signInWithPopup(auth, new GoogleAuthProvider());
+export const logout = () => signOut(auth);
+export const onUser = cb => onAuthStateChanged(auth, cb);
+const col = u => collection(db, "users", u, "items");
+export const watchItems = (u, cb) => onSnapshot(col(u), s => cb(s.docs.map(d => ({ id: d.id, ...d.data() }))));
+export const addItem = (u, x) => addDoc(col(u), { ...x, done: false, sent: {} });
+export const patchItem = (u, id, x) => updateDoc(doc(db, "users", u, "items", id), x);
+export const delItem = (u, id) => deleteDoc(doc(db, "users", u, "items", id));
+export const getMe = async u => (await getDoc(doc(db, "users", u))).data() || {};
+export const patchMe = (u, x) => setDoc(doc(db, "users", u), x, { merge: true });

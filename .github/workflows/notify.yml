@@ -1,0 +1,16 @@
+name: notify
+on:
+  schedule: [{ cron: "*/5 * * * *" }]
+  workflow_dispatch:
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: cd scripts && npm install --no-audit --no-fund && node notify.js
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          SITE_URL: ${{ secrets.SITE_URL }}
