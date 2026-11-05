@@ -13,6 +13,7 @@ async function send(u, title, body) {
 }
 for (const ud of (await db.collection("users").get()).docs) {
   const u = ud.data(), sent = u.sent || {}, msgs = [], mark = {};
+if (!(u.tgChatId && TG) && !u.fcmTokens?.length) continue;
   const docs = (await ud.ref.collection("items").where("done", "==", false).get()).docs;
   for (const d of docs) {
     const x = d.data(), s = x.sent || {}, upd = {};
