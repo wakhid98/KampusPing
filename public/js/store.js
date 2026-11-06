@@ -17,3 +17,4 @@ export const getMe = async u => (await get(ref(db, `users/${u}`))).val() || {};
 const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) v && typeof v === "object" && !Array.isArray(v) ? flat(v, p + k + "/", out) : out[p + k] = v; return out; };
 export const patchMe = (u, x) => update(ref(db, `users/${u}`), flat(x));
 export const addToken = (u, t) => set(ref(db, `users/${u}/fcm/${t}`), true);
+export const restore = (u, d) => update(ref(db), { [`items/${u}`]: d.items || null, ...Object.fromEntries(Object.entries(d.me || {}).filter(([k]) => k !== "fcm" && k !== "sent").map(([k, v]) => [`users/${u}/${k}`, v])) });

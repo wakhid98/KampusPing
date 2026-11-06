@@ -7,7 +7,10 @@ import * as G from "./pages.js";
 const $ = s => document.querySelector(s), root = $("#app"), dlg = $("#dlg"), toast = $("#toast"), gateEl = $("#gate");
 let user, me = {}, items = [], courses = [], cfg = {}, admin = false, view = "home", q = "", flt = "active", gated = false, tmr, undo, adminForm = false, unsub = [];
 const ft = { left: 1500, run: false, mode: 25, brk: false, h: null };
-const ctx = () => ({ user, me, items, courses, cfg, admin, q, flt, view, ft });
+let calOff = 0, calSel = "";
+const setTheme = n => { const t = n || (document.documentElement.dataset.theme === "light" ? "dark" : "light"); document.documentElement.dataset.theme = t; try { localStorage.setItem("kp-theme", t); } catch {} };
+try { setTheme(localStorage.getItem("kp-theme") || "dark"); } catch { setTheme("dark"); }
+const ctx = () => ({ user, me, items, courses, cfg, admin, q, flt, view, ft, calOff, calSel });
 const render = () => { root.innerHTML = user ? V.shell(ctx()) : '<div class="login"><span class="logo">K</span><h1>KampusPing</h1><p class="muted">Gagal masuk otomatis. Aktifkan Anonymous di Firebase Authentication, lalu muat ulang halaman.</p></div>'; };
 const refresh = () => { if (dlg.open) return; const k = $("#q"), pos = k?.selectionStart; render(); if (k && $("#q")) { $("#q").focus(); $("#q").setSelectionRange(pos, pos); } };
 function say(msg, fn) { clearTimeout(tmr); undo = fn; toast.innerHTML = `<span>${esc(msg)}</span>${fn ? '<button data-act="undo">Urungkan</button>' : ""}`; toast.className = "show"; tmr = setTimeout(() => toast.className = "", 6000); }
@@ -48,6 +51,8 @@ document.addEventListener("click", async e => {
     case "push": enablePush().catch(err => say(err.message)); break;
     case "clearDone": { const n = items.filter(x => x.done); if (!n.length) say("Tidak ada item selesai."); else if (confirm(`Hapus ${n.length} item yang sudah selesai? Ini tidak bisa diurungkan.`)) { await Promise.all(n.map(x => S.delItem(user.uid, x.id))); say(`${n.length} item dihapus.`); } break; }
     case "saveAdmin": { const t = $("#ann").value.trim(); await S.setCfg({ announce: t ? { id: cfg.announce?.text === t ? cfg.announce.id : Date.now(), text: t } : null, quietStart: +$("#qs").value, quietEnd: +$("#qe").value }).then(() => say("Pengaturan admin tersimpan.")).catch(() => say("Gagal: hanya admin yang boleh menyimpan.")); break; }
+    case "calNav": calOff += +d.n; render(); break; case "calDay": calSel = d.d; render(); break; case "theme": setTheme(); break;
+    case "export": { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({ v: 1, me, items: Object.fromEntries(items.map(({ id, ...x }) => [id, x])) })], { type: "application/json" })); a.download = "kampusping-cadangan.json"; a.click(); break; }
     case "ftToggle": ft.run = !ft.run; clearInterval(ft.h); if (ft.run) ft.h = setInterval(tick, 1000); render(); break;
     case "ftReset": clearInterval(ft.h); Object.assign(ft, { run: false, brk: false, left: ft.mode * 60 }); render(); break;
     case "ftMode": clearInterval(ft.h); Object.assign(ft, { mode: +d.m, run: false, brk: false, left: +d.m * 60 }); render(); break;
@@ -55,10 +60,15 @@ document.addEventListener("click", async e => {
     case "gDel": me.grades = (me.grades || []).filter((_, i) => i !== +d.i); S.patchMe(user.uid, { grades: me.grades }); render(); break;
   }
 });
+document.addEventListener("submit", e => {
+  if (e.target.id !== "qa") return; e.preventDefault(); const v = $("#qa-t").value.trim(); if (!v) return;
+  const o = G.quick(v); S.addItem(user.uid, { type: "task", title: o.title, when: o.when, weight: 1, course: "" }).then(() => say(`Tugas ditambahkan: ${o.title}`));
+});
 document.addEventListener("input", e => { if (e.target.id === "q") { q = e.target.value; $("#rows").innerHTML = V.rows(ctx()); } });
 document.addEventListener("change", e => {
   const t = e.target.dataset;
   if (t.pref) prefs({ [t.pref]: e.target.checked }).then(() => say("Pengaturan disimpan."));
+  if (t.import) { const f = e.target.files[0]; if (f) f.text().then(x => S.restore(user.uid, JSON.parse(x))).then(() => say("Data dipulihkan.")).catch(() => say("File cadangan tidak valid.")); }
   if (t.gm) prefs({ gateMin: +e.target.value }).then(() => say("Durasi disimpan."));
   if (t.g) { const [i, k] = t.g.split("."), g = [...(me.grades || [])]; g[i] = { ...g[i], [k]: k === "sks" ? +e.target.value : e.target.value }; me.grades = g; S.patchMe(user.uid, { grades: g }); $("#ipk").textContent = G.calc(g); }
 });

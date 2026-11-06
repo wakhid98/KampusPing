@@ -28,3 +28,13 @@ export const adminCard = c => !c.admin ? "" : `<div class="card stack"><h3>Penga
   <label>Pengumuman untuk semua pengguna<textarea id="ann" rows="3">${esc(c.cfg.announce?.text || "")}</textarea></label>
   <div class="row2"><label>Jam tenang mulai<input id="qs" type="number" min="0" max="23" value="${c.cfg.quietStart ?? 22}"></label><label>Jam tenang selesai<input id="qe" type="number" min="0" max="23" value="${c.cfg.quietEnd ?? 5}"></label></div>
   <button class="btn" data-act="saveAdmin">Simpan pengaturan admin</button></div>`;
+// Tambah tugas cepat: "Laporan fisika besok 23.59" -> judul + deadline (WIB)
+export function quick(txt) {
+  const W = new Date(Date.now() + 252e5), d = new Date(Date.UTC(W.getUTCFullYear(), W.getUTCMonth(), W.getUTCDate())), p = n => String(n).padStart(2, "0"), names = ["minggu", "senin", "selasa", "rabu", "kamis", "jumat", "sabtu"];
+  let t = txt, hh = 23, mm = 59, off = 1;
+  t = t.replace(/\b(\d{1,2})[.:](\d{2})\b/, (_, h, m) => { hh = +h; mm = +m; return ""; }).replace(/\bjam (\d{1,2})\b/i, (_, h) => { hh = +h; mm = 0; return ""; });
+  const w = (re, o) => re.test(t) ? (off = o, t = t.replace(re, ""), true) : false;
+  if (!w(/\bhari ini\b/i, 0) && !w(/\blusa\b/i, 2) && !w(/\bbesok\b/i, 1)) { const i = names.findIndex(n => new RegExp("\\b" + n + "\\b", "i").test(t)); if (i >= 0) { off = (i - W.getUTCDay() + 7) % 7 || 7; t = t.replace(new RegExp("\\b" + names[i] + "\\b", "i"), ""); } }
+  d.setUTCDate(d.getUTCDate() + off);
+  return { title: t.replace(/\s+/g, " ").trim() || txt, when: `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(Math.min(hh, 23))}:${p(Math.min(mm, 59))}` };
+}
