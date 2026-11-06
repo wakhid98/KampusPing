@@ -47,3 +47,14 @@ dialog::backdrop{background:#05071099;backdrop-filter:blur(4px)}dialog form{disp
 .tabs{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:10;background:#12163be6;backdrop-filter:blur(14px);border-top:1px solid var(--line);padding:6px 6px calc(6px + env(safe-area-inset-bottom))}
 .tb{flex:1;display:grid;justify-items:center;gap:2px;background:none;border:0;color:var(--mut);font-size:11px;padding:6px 0;border-radius:12px}.tb.on{color:var(--tx);background:var(--surf2)}#toast{bottom:96px}}
 :focus-visible{outline:2px solid var(--sig);outline-offset:2px}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+/* ---- v3: tampilan elegan ---- */
+body{background:radial-gradient(900px 500px at 85% -10%,#2b317d66,transparent 70%),radial-gradient(700px 400px at -5% 110%,#4b2a7a40,transparent 70%),var(--ink);background-attachment:fixed}
+aside{background:#141836cc;backdrop-filter:blur(16px)}.card{background:linear-gradient(180deg,#1b2043,var(--surf));transition:transform .2s,border-color .2s}.card:hover{border-color:#3a428c}
+.btn{background:linear-gradient(135deg,#7b8bff,#5a67e8);box-shadow:0 6px 18px #5a67e84d}.btn.ghost,.btn.danger{box-shadow:none}.top h1{font-size:32px}
+.item{transition:border-color .2s,transform .2s}.item:hover{border-color:#3a428c}.ann{border-color:var(--sig);background:linear-gradient(160deg,#3a3320,var(--surf))}.ann p{color:var(--tx)}
+.land{display:grid;grid-template-columns:1.15fr .85fr;min-height:100vh;align-items:center;gap:40px;padding:48px;max-width:1100px;margin:auto}
+.hero-l h1{font-size:clamp(40px,6vw,68px);letter-spacing:-.03em;line-height:1;margin:18px 0}.hero-l p{font-size:18px;color:var(--mut);max-width:460px}
+.feat{list-style:none;padding:0;margin-top:26px;display:grid;gap:12px}.feat li{padding-left:28px;position:relative}.feat li:before{content:"";position:absolute;left:0;top:8px;width:12px;height:12px;border-radius:4px;background:var(--sig)}
+.auth{display:grid;gap:16px;padding:28px;border-radius:24px}.auth h2{font-size:26px}.link{background:none;border:0;color:var(--mut);cursor:pointer;text-decoration:underline;justify-self:center}
+.grow-g{display:grid;grid-template-columns:1fr 80px 90px 40px;gap:8px;align-items:center}
+@media(max-width:800px){.land{grid-template-columns:1fr;padding:28px 18px;gap:24px}.grow-g{grid-template-columns:1fr 64px 76px 36px}}

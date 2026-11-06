@@ -1,4 +1,8 @@
 rules_version = '2';
-service cloud.firestore { match /databases/{db}/documents {
+service cloud.firestore { match /databases/{database}/documents {
+  function admin() { return request.auth != null && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
   match /users/{uid}/{document=**} { allow read, write: if request.auth != null && request.auth.uid == uid; }
+  match /courses/{id} { allow read: if request.auth != null; allow write: if admin(); }
+  match /config/{id} { allow read: if request.auth != null; allow write: if admin(); }
+  match /admins/{uid} { allow read: if request.auth != null && request.auth.uid == uid; allow write: if false; }
 }}

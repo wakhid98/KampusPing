@@ -15,3 +15,15 @@ export const delItem = (u, id) => deleteDoc(doc(db, "users", u, "items", id));
 export const getMe = async u => (await getDoc(doc(db, "users", u))).data() || {};
 export const patchMe = (u, x) => setDoc(doc(db, "users", u), x, { merge: true });
 export const setItem = (u, id, x) => setDoc(doc(db, "users", u, "items", id), x);
+// ---- v3: admin, mata kuliah bersama, konfigurasi ----
+import { signInWithEmailAndPassword } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+export const loginEmail = (e, p) => signInWithEmailAndPassword(auth, e, p);
+export const isAdmin = async u => (await getDoc(doc(db, "admins", u))).exists();
+const cc = () => collection(db, "courses");
+export const watchCourses = cb => onSnapshot(cc(), s => cb(s.docs.map(d => ({ id: d.id, type: "class", ...d.data() }))));
+export const addCourse = x => addDoc(cc(), x);
+export const patchCourse = (id, x) => updateDoc(doc(db, "courses", id), x);
+export const delCourse = id => deleteDoc(doc(db, "courses", id));
+export const setCourse = (id, x) => setDoc(doc(db, "courses", id), x);
+export const watchCfg = cb => onSnapshot(doc(db, "config", "app"), s => cb(s.data() || {}));
+export const setCfg = x => setDoc(doc(db, "config", "app"), x, { merge: true });
