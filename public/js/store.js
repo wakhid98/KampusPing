@@ -17,4 +17,9 @@ export const getMe = async u => (await get(ref(db, `users/${u}`))).val() || {};
 const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) v && typeof v === "object" && !Array.isArray(v) ? flat(v, p + k + "/", out) : out[p + k] = v; return out; };
 export const patchMe = (u, x) => update(ref(db, `users/${u}`), flat(x));
 export const addToken = (u, t) => set(ref(db, `users/${u}/fcm/${t}`), true);
-export const restore = (u, d) => update(ref(db), { [`items/${u}`]: d.items || null, ...Object.fromEntries(Object.entries(d.me || {}).filter(([k]) => k !== "fcm" && k !== "sent").map(([k, v]) => [`users/${u}/${k}`, v])) });
+const OK = ["streak", "best", "lastDone", "lastNote", "prefs", "focus", "grades", "attend", "tgChatId"];
+export const restore = (u, d) => { // impor disaring: hanya kolom yang dikenal
+  const items = {}; for (const [id, x] of Object.entries(d.items || {})) if (x && ["task", "scholar"].includes(x.type) && typeof x.title === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(x.when || ""))
+    items[id.replace(/[.$#\[\]\/]/g, "_").slice(0, 40)] = { type: x.type, title: x.title.slice(0, 120), course: String(x.course || "").slice(0, 80), when: x.when, weight: Math.min(3, Math.max(1, +x.weight || 1)), step: String(x.step || "").slice(0, 200), done: !!x.done };
+  return update(ref(db), { [`items/${u}`]: Object.keys(items).length ? items : null, ...Object.fromEntries(OK.filter(k => d.me?.[k] !== undefined).map(k => [`users/${u}/${k}`, d.me[k]])) });
+};

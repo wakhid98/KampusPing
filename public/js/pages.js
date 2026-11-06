@@ -38,3 +38,6 @@ export function quick(txt) {
   d.setUTCDate(d.getUTCDate() + off);
   return { title: t.replace(/\s+/g, " ").trim() || txt, when: `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}T${p(Math.min(hh, 23))}:${p(Math.min(mm, 59))}` };
 }
+export const welcome = () => `<div class="wel"><span class="logo">K</span><h1>Kuliah semakin mudah, semua dalam satu genggaman.</h1><p class="muted">Pengingat jadwal, presensi, tugas, dan fokus belajar. Tanpa daftar, tanpa ribet.</p>
+<div class="fcards">${[["Pengingat jadwal", "Notifikasi sebelum kelas dimulai."], ["Presensi mandiri", "Catat hadir, izin, sakit, dan pantau persentasenya."], ["Tugas & lampiran", "Deadline bertingkat plus tautan berkas."], ["Timer fokus", "Sesi Pomodoro dan rekap mingguan."], ["Kalkulator IPK", "Hitung IPS dan IPK kapan saja."], ["Pengumuman", "Info penting dari admin langsung ke HP."]].map(([t, d]) => `<div class="card"><b>${t}</b><p class="muted">${d}</p></div>`).join("")}</div>
+<button class="btn big" data-act="start" style="max-width:360px">Mulai sekarang</button><p class="muted" style="font-size:13px">Tanpa login. Data tersimpan di perangkatmu dan dilindungi aturan keamanan.</p></div>`;

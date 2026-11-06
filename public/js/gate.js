@@ -11,7 +11,7 @@ export function runGate(el, uid, me, task, onDone) {
   <div class="focus"><b>${esc(task.title)}</b><small>${esc(task.step || "Kerjakan bagian pertama saja")}</small></div>
   <div class="clock" id="clock">${String(left / 60).padStart(2, "0")}:00</div>
   <button class="btn big" id="go">Mulai ${left / 60} menit</button>
-  <div id="after" hidden style="display:none;gap:12px"><textarea id="note" rows="3" placeholder="Apa yang barusan kamu kerjakan?"></textarea>
+  <div id="after" hidden style="display:none;gap:12px"><textarea id="note" rows="3" maxlength="300" placeholder="Apa yang barusan kamu kerjakan?"></textarea>
   <button class="btn big" id="fin" disabled>Buka dashboard</button></div></div>`;
   const q = s => el.querySelector(s), tick = () => { q("#clock").textContent = `${String(left / 60 | 0).padStart(2, "0")}:${String(left % 60).padStart(2, "0")}`; };
   q("#go").onclick = e => {

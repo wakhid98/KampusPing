@@ -8,6 +8,7 @@ const $ = s => document.querySelector(s), root = $("#app"), dlg = $("#dlg"), toa
 let user, me = {}, items = [], courses = [], cfg = {}, admin = false, view = "home", q = "", flt = "active", gated = false, tmr, undo, adminForm = false, unsub = [];
 const ft = { left: 1500, run: false, mode: 25, brk: false, h: null };
 let calOff = 0, calSel = "";
+const seenWelcome = () => { try { return localStorage.getItem("kp-welcome"); } catch { return 1; } };
 const setTheme = n => { const t = n || (document.documentElement.dataset.theme === "light" ? "dark" : "light"); document.documentElement.dataset.theme = t; try { localStorage.setItem("kp-theme", t); } catch {} };
 try { setTheme(localStorage.getItem("kp-theme") || "dark"); } catch { setTheme("dark"); }
 const ctx = () => ({ user, me, items, courses, cfg, admin, q, flt, view, ft, calOff, calSel });
@@ -43,14 +44,16 @@ document.addEventListener("click", async e => {
     case "flt": flt = d.f; render(); break;
     case "add": if (d.t === "class" && !admin) return say("Jadwal kuliah dikelola admin."); openForm(d.t); break;
     case "edit": openForm(find(id).type, id); break;
-    case "done": { const to = d.to === "true"; await S.patchItem(user.uid, id, { done: to }); say(to ? "Ditandai selesai." : "Dikembalikan ke aktif.", () => S.patchItem(user.uid, id, { done: !to })); break; }
+    case "done": { const to = d.to === "true"; await S.patchItem(user.uid, id, { done: to, doneAt: to ? Date.now() : null }); say(to ? "Ditandai selesai." : "Dikembalikan ke aktif.", () => S.patchItem(user.uid, id, { done: !to, doneAt: !to ? Date.now() : null })); break; }
     case "del": { const { id: _, ...data } = find(id), c = find(id).type === "class";
       await (c ? S.delCourse(id) : S.delItem(user.uid, id)); say("Item dihapus.", () => c ? S.setCourse(id, data) : S.setItem(user.uid, id, data)); break; }
     case "undo": toast.className = ""; undo?.(); break;
-    case "saveChat": { const v = $("#chat").value.trim(); await S.patchMe(user.uid, { tgChatId: v }); me.tgChatId = v; say("Chat ID tersimpan."); break; }
+    case "saveChat": { const v = $("#chat").value.trim(); if (v && !/^-?\d{5,20}$/.test(v)) return say("Chat ID harus berupa angka."); await S.patchMe(user.uid, { tgChatId: v }); me.tgChatId = v; say("Chat ID tersimpan."); break; }
     case "push": enablePush().catch(err => say(err.message)); break;
     case "clearDone": { const n = items.filter(x => x.done); if (!n.length) say("Tidak ada item selesai."); else if (confirm(`Hapus ${n.length} item yang sudah selesai? Ini tidak bisa diurungkan.`)) { await Promise.all(n.map(x => S.delItem(user.uid, x.id))); say(`${n.length} item dihapus.`); } break; }
     case "saveAdmin": { const t = $("#ann").value.trim(); await S.setCfg({ announce: t ? { id: cfg.announce?.text === t ? cfg.announce.id : Date.now(), text: t } : null, quietStart: +$("#qs").value, quietEnd: +$("#qe").value }).then(() => say("Pengaturan admin tersimpan.")).catch(() => say("Gagal: hanya admin yang boleh menyimpan.")); break; }
+    case "att": { const k = day(0), cur = me.attend || {}; me.attend = { ...cur, [id]: { ...(cur[id] || {}), [k]: d.s } }; await S.patchMe(user.uid, { attend: { [id]: { [k]: d.s } } }); say("Presensi dicatat."); refresh(); break; }
+    case "start": try { localStorage.setItem("kp-welcome", "1"); } catch {} gateEl.hidden = true; break;
     case "calNav": calOff += +d.n; render(); break; case "calDay": calSel = d.d; render(); break; case "theme": setTheme(); break;
     case "export": { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({ v: 1, me, items: Object.fromEntries(items.map(({ id, ...x }) => [id, x])) })], { type: "application/json" })); a.download = "kampusping-cadangan.json"; a.click(); break; }
     case "ftToggle": ft.run = !ft.run; clearInterval(ft.h); if (ft.run) ft.h = setInterval(tick, 1000); render(); break;
@@ -74,7 +77,7 @@ document.addEventListener("change", e => {
 });
 dlg.addEventListener("submit", async e => {
   e.preventDefault(); if (e.submitter?.value === "cancel") return dlg.close();
-  const f = e.target, o = Object.fromEntries(new FormData(f)), c = f.dataset.t === "class"; if (o.day !== undefined) o.day = +o.day; if (o.weight) o.weight = +o.weight;
+  const f = e.target, o = Object.fromEntries(new FormData(f)), c = f.dataset.t === "class"; if (o.day !== undefined) o.day = +o.day; if (o.weight) o.weight = +o.weight; if (o.link && !/^https:\/\//.test(o.link)) return say("Tautan harus diawali https://");
   try {
     if (f.dataset.id) await (c ? S.patchCourse(f.dataset.id, o) : S.patchItem(user.uid, f.dataset.id, { ...o, sent: {} }));
     else await (c ? S.addCourse(o) : S.addItem(user.uid, { type: f.dataset.t, ...o }));
@@ -88,7 +91,7 @@ S.onUser(async u => {
   me = await S.getMe(u.uid); admin = false;
   unsub = [S.watchCourses(a => { courses = a; refresh(); }), S.watchCfg(c => { cfg = c; refresh(); }), S.watchItems(u.uid, arr => {
     items = arr;
-    if (!gated) { gated = true; const t = items.filter(x => x.type === "task" && !x.done).sort((a, b) => V.ms(a) - V.ms(b))[0]; if (t && needGate(me)) runGate(gateEl, u.uid, me, t, render); }
+    if (!gated) { gated = true; const t = items.filter(x => x.type === "task" && !x.done).sort((a, b) => V.ms(a) - V.ms(b))[0]; if (t && needGate(me)) runGate(gateEl, u.uid, me, t, render); else if (!items.length && !seenWelcome()) { gateEl.hidden = false; gateEl.innerHTML = G.welcome(); } }
     refresh();
   })];
 });

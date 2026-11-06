@@ -36,6 +36,7 @@ function home(c) {
   <div class="card s2"><h3>Beban minggu ini</h3><div class="ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" class="rg"/><circle cx="50" cy="50" r="44" class="rv" style="stroke:${lv[1]};stroke-dasharray:${(Math.min(load / 12, 1) * C).toFixed(1)} ${C}"/></svg><div><b style="color:${lv[1]}">${lv[0]}</b><small>${wk.length} tugas</small></div></div></div>
   <div class="card s2"><h3>Streak aksi</h3><div class="num" style="color:var(--sig)">${c.me.streak || 0}</div><p class="muted">hari beruntun · rekor ${c.me.best || 0}</p></div>
   <div class="card s4"><h3>Tugas terdekat</h3>${tasks.slice(0, 4).map(x => `<div class="row2" style="padding:6px 0"><b>${esc(x.title)}</b><small class="muted">${fmt(x)}</small></div>`).join("") || '<p class="muted">Belum ada tugas. Coba kolom tambah cepat di atas.</p>'}</div>
+  ${rekap(c)}
   <div class="card s6"><h3>Radar Beasiswa</h3>${sch ? `<div class="row2"><b>${esc(sch.title)}</b><small class="muted">tutup ${fmt(sch)}</small></div><p class="muted">Berikutnya: ${esc(sch.step || "lengkapi berkas")}</p>` : '<p class="muted">Belum ada beasiswa yang dipantau.</p>'}</div></div>`;
 }
 function cal(c) {
@@ -53,6 +54,18 @@ function listPage(c) {
   const chips = c.view === "class" ? "" : [["active", "Aktif"], ["done", "Selesai"], ["all", "Semua"]].map(([k, n]) => `<button class="chip${c.flt === k ? " on" : ""}" data-act="flt" data-f="${k}">${n}</button>`).join("");
   return `<div class="tools"><input class="search" id="q" type="search" placeholder="Cari..." value="${esc(c.q)}" aria-label="Cari">${chips}</div><div id="rows">${rows(c)}</div>`;
 }
+function attBlock(c, x) {
+  const W = new Date(Date.now() + 252e5), td = W.toISOString().slice(0, 10), rec = (c.me.attend || {})[x.id] || {}, v = Object.values(rec), pct = v.length ? Math.round(v.filter(s => s === "h").length / v.length * 100) : null;
+  const btn = x.day === W.getUTCDay() ? ["h", "i", "s", "a"].map(k => `<button class="chip${rec[td] === k ? " on" : ""}" data-act="att" data-id="${x.id}" data-s="${k}">${{ h: "Hadir", i: "Izin", s: "Sakit", a: "Alpa" }[k]}</button>`).join("") : "";
+  return !btn && pct === null ? "" : `<div class="att">${btn}${pct === null ? "" : `<span class="badge ${pct < 75 ? "bad" : "ok"}">Kehadiran ${pct}% (${v.length} pertemuan)</span>`}</div>`;
+}
+function rekap(c) {
+  const wk = Date.now() - 6048e5, done = c.items.filter(x => x.done && x.doneAt > wk).length, f = c.me.focus || {}, k = n => new Date(Date.now() + 252e5 - n * 864e5).toISOString().slice(0, 10);
+  let fs = 0; for (let i = 0; i < 7; i++) fs += f[k(i)] || 0;
+  const all = Object.values(c.me.attend || {}).flatMap(o => Object.values(o)), pct = all.length ? Math.round(all.filter(v => v === "h").length / all.length * 100) : null;
+  const st = (n, l) => `<div><div class="num" style="font-size:32px">${n}</div><small class="muted">${l}</small></div>`;
+  return `<div class="card s6"><h3>Rekap aktivitas 7 hari</h3><div class="grid" style="grid-template-columns:repeat(4,1fr)">${st(done, "tugas selesai")}${st(fs, "sesi fokus")}${st(pct === null ? "-" : pct + "%", "kehadiran")}${st(c.me.streak || 0, "streak hari")}</div></div>`;
+}
 export function rows(c) {
   const t = c.view, q = c.q.toLowerCase();
   let a = (t === "class" ? c.courses : c.items).filter(x => x.type === t && (t === "class" || c.flt === "all" || (c.flt === "done") === !!x.done));
@@ -61,16 +74,17 @@ export function rows(c) {
   if (!a.length) return `<div class="empty"><p>${c.q ? "Tidak ada hasil." : "Belum ada " + NAME[t].toLowerCase() + "."}</p>${c.q ? "" : `<button class="btn" data-act="add" data-t="${t}">${ic("plus")}Tambah ${NAME[t].toLowerCase()}</button>`}</div>`;
   return a.map(x => {
     const r = t !== "class" && !x.done ? rel(ms(x)) : null, W = ["", "Ringan", "Sedang", "Berat"][x.weight] || "";
+    const att = t === "class" ? attBlock(c, x) : "";
     const meta = t === "class" ? `${x.time}${x.room ? " · " + esc(x.room) : ""}${x.lecturer ? " · " + esc(x.lecturer) : ""}` : `${esc(x.course || "")}${x.course ? " · " : ""}${fmt(x)}`;
     return `<div class="item${x.done ? " is-done" : ""}">${t !== "class" ? `<button class="ck" data-act="done" data-id="${x.id}" data-to="${!x.done}" aria-label="${x.done ? "Batalkan selesai" : "Tandai selesai"}">${x.done ? ic("check") : ""}</button>` : `<div class="dayb">${DAYS[x.day].slice(0, 3)}</div>`}
     <div class="grow"><b>${esc(x.title)}</b><small>${meta}</small></div>${W && !x.done ? `<span class="badge">${W}</span>` : ""}${r ? `<span class="badge ${r[1]}">${r[0]}</span>` : ""}
-    ${t !== "class" || c.admin ? `<button class="ib" data-act="edit" data-id="${x.id}" aria-label="Ubah">${ic("edit")}</button><button class="ib" data-act="del" data-id="${x.id}" aria-label="Hapus">${ic("trash")}</button>` : ""}</div>`;
+    ${x.link && /^https:\/\//.test(x.link) ? `<a class="ib" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer" aria-label="Buka tautan">↗</a>` : ""}${t !== "class" || c.admin ? `<button class="ib" data-act="edit" data-id="${x.id}" aria-label="Ubah">${ic("edit")}</button><button class="ib" data-act="del" data-id="${x.id}" aria-label="Hapus">${ic("trash")}</button>` : ""}${att}</div>`;
   }).join("");
 }
-const f = (l, n, v, a = "") => `<label>${l}<input name="${n}" value="${esc(v ?? "")}" ${a}></label>`;
+const f = (l, n, v, a = "") => `<label>${l}<input name="${n}" value="${esc(v ?? "")}" ${a} maxlength="120"></label>`;
 const sel = (l, n, opts, v) => `<label>${l}<select name="${n}">${opts.map(([k, t]) => `<option value="${k}"${String(k) === String(v) ? " selected" : ""}>${t}</option>`).join("")}</select></label>`;
 export function form(t, x, id) {
-  const F = { task: f("Judul", "title", x.title, "required") + f("Mata kuliah", "course", x.course) + f("Deadline", "when", x.when, 'type="datetime-local" required') + sel("Bobot", "weight", [[1, "Ringan"], [2, "Sedang"], [3, "Berat"]], x.weight || 1) + f("Langkah pertama (10 menit)", "step", x.step),
+  const F = { task: f("Judul", "title", x.title, "required") + f("Mata kuliah", "course", x.course) + f("Deadline", "when", x.when, 'type="datetime-local" required') + sel("Bobot", "weight", [[1, "Ringan"], [2, "Sedang"], [3, "Berat"]], x.weight || 1) + f("Langkah pertama (10 menit)", "step", x.step) + f("Tautan lampiran (https)", "link", x.link, 'type="url" maxlength="300" placeholder="https://"'),
     class: f("Mata kuliah", "title", x.title, "required") + sel("Hari", "day", DAYS.map((d, i) => [i, d]), x.day ?? 1) + f("Jam mulai", "time", x.time, 'type="time" required') + f("Ruang", "room", x.room) + f("Dosen", "lecturer", x.lecturer),
     scholar: f("Nama beasiswa", "title", x.title, "required") + f("Tanggal penutupan", "when", x.when, 'type="datetime-local" required') + f("Berkas berikutnya yang disiapkan", "step", x.step) }[t];
   return `<form data-t="${t}" data-id="${id || ""}"><h2>${id ? "Ubah" : "Tambah"} ${NAME[t].toLowerCase()}</h2>${F}<div class="actions"><button class="btn ghost" value="cancel" formnovalidate>Batal</button><button class="btn" value="save">Simpan</button></div></form>`;
