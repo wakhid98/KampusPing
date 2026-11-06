@@ -16,7 +16,7 @@ export function shell(c) {
   const nav = cl => NAV.map(([k, n]) => `<button class="${cl}${k === c.view ? " on" : ""}" data-act="nav" data-v="${k}">${ic(k)}<span>${n}</span></button>`).join("");
   const body = c.view === "home" ? home(c) : c.view === "set" ? settings(c) : c.view === "fokus" ? G.fokus(c) : c.view === "ipk" ? G.ipk(c) : listPage(c);
   const add = NAME[c.view] && (c.view !== "class" || c.admin) ? `<button class="btn" data-act="add" data-t="${c.view}">${ic("plus")}Tambah</button>` : "";
-  return `<div class="shell"><aside><div class="brand"><span class="logo">K</span>KampusPing</div>${nav("nv")}<div class="grow"></div><div class="me">${esc(c.user.displayName || c.user.email)}${c.admin ? " · Admin" : ""}</div></aside>
+  return `<div class="shell"><aside><div class="brand"><span class="logo">K</span>KampusPing</div>${nav("nv")}<div class="grow"></div><div class="me">${esc(c.user.displayName || c.user.email || "Mode tanpa login")}</div></aside>
   <main><header class="top"><h1>${NAV.find(n => n[0] === c.view)[1]}</h1>${add}</header><div class="page">${body}</div></main><nav class="tabs">${nav("tb")}</nav></div>`;
 }
 const by = (c, t) => (t === "class" ? c.courses : c.items).filter(x => x.type === t && !x.done);
@@ -63,7 +63,7 @@ function settings(c) {
   const p = c.me.prefs || {}, on = k => p[k] !== false ? "checked" : "";
   const sw = (k, l) => `<label class="sw"><input type="checkbox" data-pref="${k}" ${on(k)}>${l}</label>`;
   return `<div class="stack">
-  <div class="card stack"><h3>Akun</h3><div class="row2"><span>${esc(c.user.email || "")}</span><button class="btn ghost" data-act="out">Keluar</button></div></div>
+  <div class="card stack"><h3>Mode tanpa login</h3><p class="muted">Data tersimpan di perangkat ini. Menghapus data browser akan menghilangkan data tugasmu.</p><a class="btn ghost" href="admin.html">Dasbor admin</a></div>
   <div class="card stack"><h3>Kanal notifikasi</h3>${f("Telegram Chat ID (opsional)", "chat", c.me.tgChatId, 'id="chat" placeholder="mis. 123456789"')}
    <div class="actions" style="justify-content:flex-start"><button class="btn" data-act="saveChat">Simpan Chat ID</button><button class="btn ghost" data-act="push">Aktifkan notifikasi web</button></div></div>
   <div class="card stack"><h3>Jenis pengingat</h3>${sw("task", "Tugas (H-7, H-3, H-1, 3 jam)")}${sw("class", "Kuliah (30 menit sebelum)")}${sw("scholar", "Beasiswa (H-14 sampai H-1)")}${sw("report", "Ringkasan pagi dan laporan malam")}</div>

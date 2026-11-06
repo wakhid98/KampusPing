@@ -8,7 +8,7 @@ const $ = s => document.querySelector(s), root = $("#app"), dlg = $("#dlg"), toa
 let user, me = {}, items = [], courses = [], cfg = {}, admin = false, view = "home", q = "", flt = "active", gated = false, tmr, undo, adminForm = false, unsub = [];
 const ft = { left: 1500, run: false, mode: 25, brk: false, h: null };
 const ctx = () => ({ user, me, items, courses, cfg, admin, q, flt, view, ft });
-const render = () => { root.innerHTML = user ? V.shell(ctx()) : G.login(adminForm); };
+const render = () => { root.innerHTML = user ? V.shell(ctx()) : '<div class="login"><span class="logo">K</span><h1>KampusPing</h1><p class="muted">Gagal masuk otomatis. Aktifkan Anonymous di Firebase Authentication, lalu muat ulang halaman.</p></div>'; };
 const refresh = () => { if (dlg.open) return; const k = $("#q"), pos = k?.selectionStart; render(); if (k && $("#q")) { $("#q").focus(); $("#q").setSelectionRange(pos, pos); } };
 function say(msg, fn) { clearTimeout(tmr); undo = fn; toast.innerHTML = `<span>${esc(msg)}</span>${fn ? '<button data-act="undo">Urungkan</button>' : ""}`; toast.className = "show"; tmr = setTimeout(() => toast.className = "", 6000); }
 const find = id => items.find(x => x.id === id) || courses.find(x => x.id === id);
@@ -19,7 +19,7 @@ async function enablePush() {
   if (await Notification.requestPermission() !== "granted") return say("Izin notifikasi ditolak browser.");
   const reg = await navigator.serviceWorker.register("firebase-messaging-sw.js");
   const token = await getToken(getMessaging(S.app), { vapidKey: VAPID, serviceWorkerRegistration: reg });
-  await S.patchMe(user.uid, { fcmTokens: S.arrayUnion(token) }); say("Notifikasi web aktif.");
+  await S.addToken(user.uid, token); say("Notifikasi web aktif.");
 }
 function tick() {
   ft.left--; const el = $("#ftime"); if (el) el.textContent = G.mmss(ft.left);
@@ -75,7 +75,7 @@ setInterval(() => { if (user && !document.hidden && $("#rows") && !dlg.open) $("
 S.onUser(async u => {
   unsub.forEach(f => f()); unsub = []; user = u; admin = false;
   if (!u) return render();
-  me = await S.getMe(u.uid); admin = await S.isAdmin(u.uid).catch(() => false);
+  me = await S.getMe(u.uid); admin = false;
   unsub = [S.watchCourses(a => { courses = a; refresh(); }), S.watchCfg(c => { cfg = c; refresh(); }), S.watchItems(u.uid, arr => {
     items = arr;
     if (!gated) { gated = true; const t = items.filter(x => x.type === "task" && !x.done).sort((a, b) => V.ms(a) - V.ms(b))[0]; if (t && needGate(me)) runGate(gateEl, u.uid, me, t, render); }
