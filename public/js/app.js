@@ -5,13 +5,14 @@ import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/10.12
 import * as V from "./views.js";
 import * as G from "./pages.js";
 const $ = s => document.querySelector(s), root = $("#app"), dlg = $("#dlg"), toast = $("#toast"), overlay = $("#gate");
-let user, me = {}, items = [], courses = [], cfg = {}, view = "home", q = "", flt = "active", lst = "*all", calOff = 0, calSel = "", tmr, undo, unsub = [], first = true;
+let user, me = {}, items = [], courses = [], cfg = {}, view = "home", q = "", flt = "active", lst = "*all", calOff = 0, calSel = "", tmr, undo, unsub = [], first = true, boot = "load", authErr = null;
 const ft = { left: 1500, run: false, mode: 25, brk: false, h: null };
 const setTheme = n => { const t = n || (document.documentElement.dataset.theme === "light" ? "dark" : "light"); document.documentElement.dataset.theme = t; try { localStorage.setItem("kp-theme", t); } catch { /* penyimpanan dinonaktifkan */ } };
 try { setTheme(localStorage.getItem("kp-theme") || "light"); } catch { setTheme("light"); }
 const seenWelcome = () => { try { return localStorage.getItem("kp-welcome"); } catch { return 1; } };
 const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, ft, calOff, calSel });
-const render = () => { root.innerHTML = user ? V.shell(ctx()) : '<div class="login"><span class="logo">K</span><h1>KampusPing</h1><p class="muted">Gagal masuk otomatis. Aktifkan Anonymous di Firebase Authentication, lalu muat ulang halaman.</p></div>'; };
+const render = () => { root.innerHTML = user ? V.shell(ctx()) : G.boot(boot === "error" ? authErr || {} : null); };
+const onAuthErr = e => { boot = "error"; authErr = e; render(); };
 const refresh = () => { if (dlg.open) return; const k = $("#q"), pos = k?.selectionStart; render(); if (k && $("#q")) { $("#q").focus(); $("#q").setSelectionRange(pos, pos); } };
 function say(msg, fn) { clearTimeout(tmr); undo = fn; toast.innerHTML = `<span>${esc(msg)}</span>${fn ? '<button data-act="undo">Urungkan</button>' : ""}`; toast.className = "show"; tmr = setTimeout(() => toast.className = "", 6000); }
 const find = id => items.find(x => x.id === id);
@@ -41,6 +42,7 @@ document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const d = b.dataset, id = d.id;
   switch (d.act) {
+    case "retry": boot = "load"; render(); S.retry(onAuthErr); break;
     case "nav": view = d.v; q = ""; flt = "active"; render(); break;
     case "flt": flt = d.f; render(); break;
     case "lst": lst = d.l; render(); break;
@@ -66,6 +68,7 @@ document.addEventListener("click", async e => {
     case "att": { const k = day(0), cur = me.attend || {}; me.attend = { ...cur, [id]: { ...(cur[id] || {}), [k]: d.s } }; await S.patchMe(user.uid, { attend: { [id]: { [k]: d.s } } }); say("Presensi dicatat."); refresh(); break; }
     case "start": try { localStorage.setItem("kp-welcome", "1"); } catch { /* abaikan */ } overlay.hidden = true; break;
     case "calNav": calOff += +d.n; render(); break;
+    case "calToday": calOff = 0; calSel = ""; render(); break;
     case "calDay": calSel = d.d; render(); break;
     case "theme": setTheme(); break;
     case "export": { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({ v: 1, me, items: Object.fromEntries(items.map(({ id: i, ...x }) => [i, x])) })], { type: "application/json" })); a.download = "kampusping-cadangan.json"; a.click(); break; }
@@ -101,14 +104,15 @@ dlg.addEventListener("submit", async e => {
   catch { say("Gagal menyimpan. Periksa isian."); }
 });
 setInterval(() => { if (user && !document.hidden && $("#rows") && !dlg.open) $("#rows").innerHTML = V.rows(ctx()); }, 60000);
+S.setDbErr(() => say("Koneksi ke database bermasalah. Periksa internet atau aturan database."));
 S.onUser(async u => {
   unsub.forEach(fn => fn()); unsub = []; user = u;
-  if (!u) return render();
-  me = await S.getMe(u.uid);
+  if (!u) return;
+  boot = "ok"; me = await S.getMe(u.uid).catch(() => ({}));
   unsub = [S.watchCourses(a => { courses = a; refresh(); }), S.watchCfg(c => { cfg = c; refresh(); }), S.watchItems(u.uid, arr => {
     items = arr;
     if (first) { first = false; if (!arr.length && !seenWelcome()) { overlay.hidden = false; overlay.innerHTML = G.welcome(); } }
     refresh();
   })];
-});
+}, onAuthErr);
 render();

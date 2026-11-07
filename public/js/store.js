@@ -1,14 +1,26 @@
 // Penyimpanan: Firebase Realtime Database + login anonim otomatis (tanpa login untuk pengguna).
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getAuth, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence, signInAnonymously, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, onValue, push, set, update, remove, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
-export const app = initializeApp(firebaseConfig), auth = getAuth(app), db = getDatabase(app);
-export const onUser = cb => onAuthStateChanged(auth, u => u ? cb(u) : signInAnonymously(auth).catch(() => cb(null)));
-const list = (p, extra = {}) => cb => onValue(ref(db, p), s => cb(Object.entries(s.val() || {}).map(([id, v]) => ({ id, ...extra, ...v }))));
+export const app = initializeApp(firebaseConfig), auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence, browserSessionPersistence, inMemoryPersistence] }), db = getDatabase(app);
+let busy = false, dbErr = () => {};
+export const setDbErr = f => { dbErr = f; };
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function signIn(onErr) { // coba masuk anonim sampai 4 kali dengan jeda bertambah; kesalahan konfigurasi tidak diulang
+  if (busy) return; busy = true; let err;
+  for (let i = 0; i < 4; i++) {
+    try { await signInAnonymously(auth); busy = false; return; }
+    catch (e) { err = e; if (["auth/operation-not-allowed", "auth/admin-restricted-operation", "auth/invalid-api-key"].includes(e.code)) break; await sleep(1000 * 2 ** i); }
+  }
+  busy = false; onErr(err);
+}
+export const retry = onErr => signIn(onErr);
+export const onUser = (cb, onErr) => { window.addEventListener("online", () => { if (!auth.currentUser) signIn(onErr); }); return onAuthStateChanged(auth, u => u ? cb(u) : signIn(onErr)); };
+const list = (p, extra = {}) => cb => onValue(ref(db, p), s => cb(Object.entries(s.val() || {}).map(([id, v]) => ({ id, ...extra, ...v }))), () => dbErr());
 export const watchItems = (u, cb) => list(`items/${u}`)(cb);
 export const watchCourses = cb => list("courses", { type: "class" })(cb);
-export const watchCfg = cb => onValue(ref(db, "config"), s => cb(s.val() || {}));
+export const watchCfg = cb => onValue(ref(db, "config"), s => cb(s.val() || {}), () => dbErr());
 export const addItem = (u, x) => push(ref(db, `items/${u}`), { ...x, done: false });
 export const patchItem = (u, id, x) => update(ref(db, `items/${u}/${id}`), x);
 export const delItem = (u, id) => remove(ref(db, `items/${u}/${id}`));

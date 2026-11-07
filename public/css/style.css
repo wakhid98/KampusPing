@@ -37,9 +37,6 @@ label{display:grid;gap:6px;font-size:13px;color:var(--mut)}.fgrid{display:grid;g
 .badge{font-size:12px;padding:3px 10px;border-radius:99px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}.badge.ok{color:var(--ok)}.badge.acc{color:var(--acc)}.badge.warn{color:var(--warn);border-color:var(--warn)}.badge.bad{color:var(--bad);border-color:var(--bad)}
 .empty{text-align:center;padding:46px 16px;border:1px dashed var(--line);border-radius:var(--r);color:var(--mut);display:grid;gap:14px;justify-items:center}
 .sw{display:flex;align-items:center;gap:10px;font-size:15px;color:var(--tx)}.sw input{width:20px;height:20px}.actions{display:flex;justify-content:flex-end;gap:10px;align-items:center}
-.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;margin:12px 0}.cal b{text-align:center;font-size:12px;color:var(--mut);font-weight:500}
-.cd{position:relative;aspect-ratio:1;border-radius:14px;border:1px solid var(--line);background:var(--surf);cursor:pointer;font-size:14px}.cd:hover{border-color:var(--acc)}.cd.today{border-color:var(--acc2);color:var(--acc2)}.cd.sel{background:var(--acc);border-color:var(--acc);color:#fff}
-.cd i{position:absolute;left:50%;bottom:6px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--sig)}
 .clock{font-size:88px;font-weight:700;text-align:center;letter-spacing:-.03em;color:var(--acc)}
 .grow-g{display:grid;grid-template-columns:1fr 80px 90px 40px;gap:8px;align-items:center}
 .foot{max-width:1160px;margin:auto;padding:20px 24px 100px;display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;color:var(--mut);font-size:13px;border-top:1px solid var(--line)}
@@ -55,3 +52,11 @@ dialog{border:1px solid var(--line);border-radius:22px;background:var(--surf);co
 .tabs{display:flex;position:fixed;bottom:0;left:0;right:0;z-index:25;background:var(--surf);border-top:1px solid var(--line);padding:6px 4px calc(6px + env(safe-area-inset-bottom))}
 .tb{flex:1;display:grid;justify-items:center;gap:2px;background:none;border:0;color:var(--mut);font-size:10px;padding:6px 0;border-radius:12px}.tb.on{color:var(--acc);background:var(--surf2)}.tb svg{width:20px;height:20px}.btn span{display:none}.btn svg{margin:0}#toast{bottom:84px}}
 :focus-visible{outline:2px solid var(--sig);outline-offset:2px}@media(prefers-reduced-motion:reduce){*{transition:none!important}}
+
+.calwrap{display:grid;grid-template-columns:minmax(290px,350px) 1fr;gap:20px;align-items:start}.calc{padding:14px}.mon{font:700 16px "Space Grotesk"}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;margin:10px 0}.cal b{text-align:center;font-size:11px;color:var(--mut);font-weight:600;padding:4px 0}
+.cd{display:grid;justify-items:center;align-content:center;gap:1px;height:40px;border:0;border-radius:10px;background:none;cursor:pointer;font-size:13px}.cd:hover{background:var(--surf2)}
+.cd.min span{color:var(--bad)}.cd.today span{color:var(--acc);font-weight:700}.cd.sel{background:var(--acc)}.cd.sel span{color:#fff}
+.dots{display:flex;gap:2px;height:5px}.dots i,.leg i{width:5px;height:5px;border-radius:50%;display:inline-block}.dotk{background:var(--acc)}.dott{background:var(--sig)}.dotb{background:var(--ok)}.cd.sel .dots i{box-shadow:0 0 0 1px #fff}
+.leg{display:flex;gap:6px;align-items:center}.pulse{animation:pulse 1.2s ease-in-out infinite}@keyframes pulse{50%{transform:scale(1.12);opacity:.7}}
+@media(max-width:860px){.calwrap{grid-template-columns:1fr}}

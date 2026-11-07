@@ -46,14 +46,19 @@ function home(c) {
 }
 function cal(c) {
   const W = new Date(Date.now() + 252e5), base = new Date(Date.UTC(W.getUTCFullYear(), W.getUTCMonth() + (c.calOff || 0), 1)), y = base.getUTCFullYear(), m = base.getUTCMonth(), p = n => String(n).padStart(2, "0");
-  const dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), today = W.toISOString().slice(0, 10), sel = c.calSel || today, ev = {};
+  const dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), today = W.toISOString().slice(0, 10), sel = c.calSel || today, ev = {}, wd = new Set(c.courses.map(x => x.day));
   c.items.filter(x => x.when && !x.done).forEach(x => (ev[x.when.slice(0, 10)] ||= []).push(x));
-  const days = Array.from({ length: dim }, (_, i) => { const k = `${y}-${p(m + 1)}-${p(i + 1)}`; return `<button class="cd${k === today ? " today" : ""}${k === sel ? " sel" : ""}" data-act="calDay" data-d="${k}">${i + 1}${ev[k] ? "<i></i>" : ""}</button>`; });
+  const days = Array.from({ length: dim }, (_, i) => {
+    const k = `${y}-${p(m + 1)}-${p(i + 1)}`, dw = (base.getUTCDay() + i) % 7, e = ev[k] || [];
+    const dots = `${wd.has(dw) ? '<i class="dotk"></i>' : ""}${e.some(x => x.type === "task") ? '<i class="dott"></i>' : ""}${e.some(x => x.type === "scholar") ? '<i class="dotb"></i>' : ""}`;
+    return `<button class="cd${k === today ? " today" : ""}${k === sel ? " sel" : ""}${dw === 0 ? " min" : ""}" data-act="calDay" data-d="${k}"><span>${i + 1}</span><em class="dots">${dots}</em></button>`;
+  });
   const dow = new Date(sel + "T00:00:00Z").getUTCDay(), list = [...(ev[sel] || []).map(x => `<div class="item"><div class="grow"><b>${esc(x.title)}</b><small>${x.type === "scholar" ? "Beasiswa" : "Tugas"} · ${fmt(x)}</small></div></div>`),
     ...c.courses.filter(x => x.day === dow).sort((a, b) => a.time.localeCompare(b.time)).map(x => `<div class="item"><div class="dayb">${esc(x.time)}</div><div class="grow"><b>${esc(x.title)}</b><small>Kuliah${x.room ? " · " + esc(x.room) : ""}</small></div></div>`)];
-  return `<div class="row2"><button class="ib" data-act="calNav" data-n="-1" aria-label="Bulan lalu">‹</button><h2>${base.toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: "UTC" })}</h2><button class="ib" data-act="calNav" data-n="1" aria-label="Bulan depan">›</button></div>
-  <div class="cal">${["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"].map(d => `<b>${d}</b>`).join("")}${Array(base.getUTCDay()).fill("<span></span>").join("")}${days.join("")}</div>
-  <h3 class="muted" style="margin:16px 0 10px;font-weight:500">${DAYS[dow]}, ${sel.split("-").reverse().join("/")}</h3>${list.join("") || '<div class="empty">Tidak ada agenda di hari ini.</div>'}`;
+  return `<div class="calwrap"><div class="card calc"><div class="row2"><button class="ib" data-act="calNav" data-n="-1" aria-label="Bulan lalu">‹</button><b class="mon">${base.toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: "UTC" })}</b><button class="ib" data-act="calNav" data-n="1" aria-label="Bulan depan">›</button></div>
+  <div class="cal">${["M", "S", "S", "R", "K", "J", "S"].map(d => `<b>${d}</b>`).join("")}${Array(base.getUTCDay()).fill("<span></span>").join("")}${days.join("")}</div>
+  <div class="row2"><button class="chip" data-act="calToday">Hari ini</button><small class="muted leg"><i class="dotk"></i>kuliah <i class="dott"></i>tugas <i class="dotb"></i>beasiswa</small></div></div>
+  <div><h3 class="muted" style="margin:0 0 10px;font-weight:600">${DAYS[dow]}, ${sel.split("-").reverse().join("/")}</h3>${list.join("") || '<div class="empty">Tidak ada agenda di hari ini.</div>'}</div></div>`;
 }
 function listPage(c) {
   const t = c.view, chip = ([k, n]) => `<button class="chip${c.flt === k ? " on" : ""}" data-act="flt" data-f="${k}">${n}</button>`;
