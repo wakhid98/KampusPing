@@ -1,9 +1,9 @@
 // Pemeriksaan mandiri: konfigurasi, browser, login anonim, jangkauan database, WebSocket, pembacaan data, dan CSP.
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
+import { getDatabase, ref, get, enableLogging } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { esc, fbCfg } from "./util.js";
-const out = document.querySelector("#out"), st = document.querySelector("#st"), rows = [], blocked = [], res = {};
+const out = document.querySelector("#out"), st = document.querySelector("#st"), rows = [], blocked = [], res = {}, logs = [];
 document.addEventListener("securitypolicyviolation", e => blocked.push(`${e.violatedDirective}: ${e.blockedURI}`));
 const add = (n, ok, d = "", k = "") => { if (k) res[k] = ok; rows.push([n, ok, d]); out.innerHTML = rows.map(([t, o, x]) => `<div class="item"><span class="badge ${o ? "ok" : "bad"}">${o ? "OK" : "GAGAL"}</span><div class="grow"><b>${esc(t)}</b><small>${esc(x)}</small></div></div>`).join(""); };
 const lim = (p, ms) => Promise.race([p, new Promise((_, r) => setTimeout(() => r({ code: "timeout", message: "Tidak ada respons dalam " + ms / 1000 + " detik." }), ms))]);
@@ -28,6 +28,7 @@ if (host) {
   add("WebSocket ke database", ws, ws ? "Tersambung" : "Gagal atau lambat. Aplikasi jatuh ke long-polling (bisa lambat sampai sekitar 30 detik). Jaringan, ISP, atau ekstensi mungkin memblokir WebSocket.", "ws");
 }
 if (!miss.length) {
+  enableLogging(m => { logs.push(String(m)); });
   const db = getDatabase(initializeApp(cfg, "cek")), paths = [["config", "config"], ["courses", "courses"]];
   if (okKey) paths.push(["data kamu", "users/" + key]);
   st.textContent = "Menguji pembacaan database (maksimal 40 detik)...";
@@ -36,6 +37,7 @@ if (!miss.length) {
     try { await lim(get(ref(db, p)), 40000); add("Database: baca " + n, true, `Terbaca dalam ${Math.round((Date.now() - t0) / 1000)} detik`, "read"); }
     catch (e) { add("Database: baca " + n, false, er(e) + (/permission/i.test(er(e)) ? " → deploy aturan: firebase deploy --only database" : ""), "read"); }
   }));
+  if (rows.some(([n, o]) => n.startsWith("Database: baca") && !o)) add("Log SDK database", false, logs.slice(-6).join(" | ").slice(0, 700) || "(kosong)");
 }
 await new Promise(r => setTimeout(r, 500));
 add("Pemblokiran keamanan (CSP)", !blocked.length, blocked.length ? blocked.slice(0, 5).join(" | ") : "Tidak ada permintaan yang diblokir");
@@ -43,5 +45,5 @@ st.textContent = res.rules === false ? "Kesimpulan: aturan database lama masih a
   : res.wr === false ? "Kesimpulan: aturan database menolak penulisan data pribadi. Deploy ulang aturan terbaru: firebase deploy --only database."
   : res.rest === false ? "Kesimpulan: database tidak ditemukan atau tidak terjangkau. Periksa URL di Firebase Console, Realtime Database, lalu samakan dengan databaseURL."
   : res.ws === false ? "Kesimpulan: WebSocket diblokir. Coba jaringan atau HP lain, dan matikan ekstensi pemblokir."
-  : res.read === false ? "Kesimpulan: database ada tetapi tidak menjawab pembacaan. Cek App Check (harus Unenforced untuk Realtime Database) dan aturan database."
+  : res.read === false ? "Kesimpulan: SDK realtime tidak menerima data (web utama tetap berjalan lewat HTTP, dasbor admin memakai SDK dan mungkin terpengaruh). Lihat baris Log SDK."
   : Object.values(res).every(Boolean) && !blocked.length ? "Kesimpulan: semua pemeriksaan lolos." : "Kesimpulan: lihat baris yang GAGAL di atas.";
