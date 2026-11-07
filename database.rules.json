@@ -27,7 +27,7 @@
    }
   },
   "courses": {
-   ".read": "auth != null",
+   ".read": true,
    "$id": {
     ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
     ".validate": "newData.hasChildren(['title','day','time'])",
@@ -55,7 +55,7 @@
    }
   },
   "config": {
-   ".read": "auth != null",
+   ".read": true,
    ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
    "announce": {
     "id": {
@@ -82,8 +82,8 @@
    ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
    ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
    "$uid": {
-    ".read": "auth != null && auth.uid === $uid",
-    ".write": "auth != null && auth.uid === $uid",
+    ".read": "$uid.matches(/^[A-Za-z0-9]{20,64}$/)",
+    ".write": "$uid.matches(/^[A-Za-z0-9]{20,64}$/)",
     "tgChatId": {
      ".validate": "newData.isString() && newData.val().length <= 20 && newData.val().matches(/^-?[0-9]*$/)"
     },
@@ -158,8 +158,8 @@
    ".read": "auth != null && root.child('admins').child(auth.uid).exists()",
    ".write": "auth != null && root.child('admins').child(auth.uid).exists()",
    "$uid": {
-    ".read": "auth != null && auth.uid === $uid",
-    ".write": "auth != null && auth.uid === $uid",
+    ".read": "$uid.matches(/^[A-Za-z0-9]{20,64}$/)",
+    ".write": "$uid.matches(/^[A-Za-z0-9]{20,64}$/)",
     "$id": {
      ".validate": "newData.hasChildren(['type','title','done'])",
      "type": {

@@ -5,14 +5,14 @@ import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/10.12
 import * as V from "./views.js";
 import * as G from "./pages.js";
 const $ = s => document.querySelector(s), root = $("#app"), dlg = $("#dlg"), toast = $("#toast"), overlay = $("#gate");
-let user, me = {}, items = [], courses = [], cfg = {}, view = "home", q = "", flt = "active", lst = "*all", calOff = 0, calSel = "", tmr, undo, unsub = [], first = true, boot = "load", authErr = null;
+const user = { uid: S.deviceKey() };
+let me = {}, items = [], courses = [], cfg = {}, view = "home", q = "", flt = "active", lst = "*all", calOff = 0, calSel = "", tmr, undo, first = true, conn = false, slow = false;
 const ft = { left: 1500, run: false, mode: 25, brk: false, h: null };
 const setTheme = n => { const t = n || (document.documentElement.dataset.theme === "light" ? "dark" : "light"); document.documentElement.dataset.theme = t; try { localStorage.setItem("kp-theme", t); } catch { /* penyimpanan dinonaktifkan */ } };
 try { setTheme(localStorage.getItem("kp-theme") || "light"); } catch { setTheme("light"); }
 const seenWelcome = () => { try { return localStorage.getItem("kp-welcome"); } catch { return 1; } };
-const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, ft, calOff, calSel });
-const render = () => { root.innerHTML = user ? V.shell(ctx()) : G.boot(boot === "error" ? authErr || {} : null); };
-const onAuthErr = e => { boot = "error"; authErr = e; render(); };
+const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, ft, calOff, calSel, conn, slow });
+const render = () => { root.innerHTML = V.shell(ctx()); };
 const refresh = () => { if (dlg.open) return; const k = $("#q"), pos = k?.selectionStart; render(); if (k && $("#q")) { $("#q").focus(); $("#q").setSelectionRange(pos, pos); } };
 function say(msg, fn) { clearTimeout(tmr); undo = fn; toast.innerHTML = `<span>${esc(msg)}</span>${fn ? '<button data-act="undo">Urungkan</button>' : ""}`; toast.className = "show"; tmr = setTimeout(() => toast.className = "", 6000); }
 const find = id => items.find(x => x.id === id);
@@ -42,7 +42,8 @@ document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const d = b.dataset, id = d.id;
   switch (d.act) {
-    case "retry": boot = "load"; render(); S.retry(onAuthErr); break;
+    case "copyKey": navigator.clipboard?.writeText(user.uid).then(() => say("Kode disalin.")).catch(() => say("Gagal menyalin. Salin manual dari kolom.")); break;
+    case "useKey": { const v = $("#newkey").value.trim(); if (!S.KEY_RE.test(v)) return say("Kode tidak valid (20 sampai 64 huruf atau angka)."); if (confirm("Pindah ke data dengan kode ini? Data di perangkat ini tetap tersimpan dengan kode lamanya.") && S.setDeviceKey(v)) location.reload(); break; }
     case "nav": view = d.v; q = ""; flt = "active"; render(); break;
     case "flt": flt = d.f; render(); break;
     case "lst": lst = d.l; render(); break;
@@ -105,14 +106,14 @@ dlg.addEventListener("submit", async e => {
 });
 setInterval(() => { if (user && !document.hidden && $("#rows") && !dlg.open) $("#rows").innerHTML = V.rows(ctx()); }, 60000);
 S.setDbErr(() => say("Koneksi ke database bermasalah. Periksa internet atau aturan database."));
-S.onUser(async u => {
-  unsub.forEach(fn => fn()); unsub = []; user = u;
-  if (!u) return;
-  boot = "ok"; me = await S.getMe(u.uid).catch(() => ({}));
-  unsub = [S.watchCourses(a => { courses = a; refresh(); }), S.watchCfg(c => { cfg = c; refresh(); }), S.watchItems(u.uid, arr => {
-    items = arr;
-    if (first) { first = false; if (!arr.length && !seenWelcome()) { overlay.hidden = false; overlay.innerHTML = G.welcome(); } }
-    refresh();
-  })];
-}, onAuthErr);
+setTimeout(() => { if (!conn) { slow = true; refresh(); } }, 4000);
+S.watchMe(user.uid, v => { me = v || {}; refresh(); });
+S.watchConn(v => { conn = v; refresh(); });
+S.watchCourses(a => { courses = a; refresh(); });
+S.watchCfg(c => { cfg = c; refresh(); });
+S.watchItems(user.uid, arr => {
+  items = arr;
+  if (first) { first = false; if (!arr.length && !seenWelcome()) { overlay.hidden = false; overlay.innerHTML = G.welcome(); } }
+  refresh();
+});
 render();
