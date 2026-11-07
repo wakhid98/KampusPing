@@ -36,7 +36,7 @@ for (const [uid, u] of Object.entries(users)) {
   }
   const cls = courses.filter(x => x.day === W.getUTCDay()).sort((a, b) => a.time.localeCompare(b.time));
   if (P.report !== false && hm >= 390 && hm < 420 && !sent["m" + ymd]) { msgs.push(["☀️ Ringkasan pagi", `${cls.length} kelas hari ini${cls[0] ? `, pertama ${cls[0].time} ${cls[0].title}` : ""}\nStreak: ${u.streak || 0} hari`]); mark["m" + ymd] = true; }
-  if (P.report !== false && hm >= 1260 && !sent["n" + ymd]) { msgs.push(u.lastDone === ymd ? ["✅ Aksi hari ini selesai", `Streak ${u.streak || 0} hari. Catatan: ${u.lastNote || "-"}`] : ["⚠️ Belum ada aksi hari ini", `Streak ${u.streak || 0} hari terancam putus. Buka web dan mulai.`]); mark["n" + ymd] = true; }
+  if (P.report !== false && hm >= 1260 && !sent["n" + ymd]) { msgs.push(u.lastDone === ymd ? ["✅ Aksi hari ini selesai", `Streak ${u.streak || 0} hari.`] : ["⚠️ Belum ada aksi hari ini", `Streak ${u.streak || 0} hari terancam putus. Buka web dan mulai.`]); mark["n" + ymd] = true; }
   let ann = false;
   if (cfg.announce?.text && u.annId !== cfg.announce.id) { msgs.push(["📢 Pengumuman", cfg.announce.text]); ann = true; }
   for (const [t, b] of msgs) await send(uid, u, t, b);

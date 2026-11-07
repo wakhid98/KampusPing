@@ -3,10 +3,10 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, setPersistence, browserSessionPersistence, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, onValue, push, set, update, remove, get, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
+import { esc } from "./util.js";
 const app = initializeApp(firebaseConfig, "admin"), auth = getAuth(app), db = getDatabase(app); // sesi terpisah dari web pengguna
 setPersistence(auth, browserSessionPersistence); // sesi berakhir saat tab ditutup
 const $ = s => document.querySelector(s), root = $("#app"), toast = $("#toast");
-const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"], TABS = [["mk", "Mata kuliah"], ["ann", "Pengumuman & pengaturan"], ["dat", "Data pengguna"], ["log", "Log aktivitas"]];
 let user = null, adm = null, tab = "mk", edit = null, listening = false, idle, D = { courses: {}, config: {}, users: {}, items: {}, audit: {} };
 let fails = 0, until = 0; try { fails = +localStorage.getItem("kp-f") || 0; until = +localStorage.getItem("kp-u") || 0; } catch {}
@@ -44,7 +44,9 @@ function render() {
   <label class="sw"><input type="checkbox" data-act="showpw"> Tampilkan kata sandi</label><button class="btn big">Masuk</button></form>
   <button class="link" data-act="reset">Lupa kata sandi?</button><a class="link" href="/">Kembali ke KampusPing</a><p class="muted" style="font-size:12px">Sesi berakhir otomatis setelah 15 menit tidak aktif atau saat tab ditutup.</p></div>`;
   if (adm === null) return root.innerHTML = '<div class="login"><p class="muted">Memeriksa akses...</p></div>';
-  if (!adm) return root.innerHTML = '<div class="login"><h1>Akses ditolak</h1><p class="muted">Akun ini bukan admin.</p><button class="btn" data-act="out">Keluar</button></div>';
+  if (!adm) return root.innerHTML = `<div class="login"><h1>Belum terdaftar sebagai admin</h1><p class="muted">Login berhasil sebagai ${esc(user.email)}, tetapi akun ini belum ada di daftar admin.</p>
+  <div class="card stack" style="text-align:left"><b>Cara mengaktifkan</b><ol style="padding-left:18px"><li>Buka Firebase Console, Realtime Database, tab Data.</li><li>Tambahkan node <code>admins</code>, lalu child bernama persis UID di bawah dengan nilai <code>true</code>.</li><li>Pastikan aturan sudah dipasang: <code>firebase deploy --only database</code>.</li></ol>
+  <label>UID kamu<input readonly value="${esc(user.uid)}"></label><button class="btn ghost" data-act="copyuid">Salin UID</button></div><button class="btn" data-act="out">Keluar</button></div>`;
   root.innerHTML = `<div style="max-width:980px;margin:auto;padding-bottom:40px"><header class="top"><h1>Dasbor Admin</h1><div class="actions"><small class="muted">${esc(user.email)}</small><a class="btn ghost" href="/">Lihat web</a><button class="btn ghost" data-act="out">Keluar</button></div></header>
   <div class="page"><div class="tools">${TABS.map(([k, n]) => `<button class="chip${k === tab ? " on" : ""}" data-act="tab" data-t="${k}">${n}</button>`).join("")}</div>${tab === "mk" ? mk() : tab === "ann" ? ann() : tab === "dat" ? dat() : logv()}</div></div>`;
 }
@@ -56,12 +58,13 @@ function listen() {
 }
 onAuthStateChanged(auth, u => {
   user = u; adm = null; render(); if (!u) return;
-  get(ref(db, `admins/${u.uid}`)).then(s => { adm = s.exists(); render(); if (adm) { listen(); bump(); logA("Login admin"); } else signOut(auth); }).catch(() => { adm = false; render(); });
+  get(ref(db, `admins/${u.uid}`)).then(s => { adm = s.exists(); render(); if (adm) { listen(); bump(); logA("Login admin"); } }).catch(() => { adm = false; render(); });
 });
+const why = c => c === "auth/operation-not-allowed" ? "Metode Email/Password belum diaktifkan di Firebase Authentication." : c === "auth/too-many-requests" ? "Terlalu banyak percobaan. Coba lagi nanti." : c === "auth/network-request-failed" ? "Tidak ada koneksi internet." : c === "auth/invalid-api-key" || c === "auth/configuration-not-found" ? "Konfigurasi Firebase belum benar (cek firebase-config.js)." : "Email atau kata sandi salah.";
 async function login() {
   if (Date.now() < until) return say(`Terlalu banyak percobaan. Coba lagi ${Math.ceil((until - Date.now()) / 1000)} detik.`);
   try { await signInWithEmailAndPassword(auth, $("#em").value.trim(), $("#pw").value); fails = 0; keep(); }
-  catch (e) { fails++; if (fails >= 5) until = Date.now() + Math.min(60 * 2 ** (fails - 5), 1800) * 1000; keep(); say(e.code === "auth/too-many-requests" ? "Terlalu banyak percobaan. Coba lagi nanti." : "Email atau kata sandi salah."); }
+  catch (e) { fails++; if (fails >= 5) until = Date.now() + Math.min(60 * 2 ** (fails - 5), 1800) * 1000; keep(); say(why(e.code)); }
 }
 document.addEventListener("submit", e => { if (e.target.id === "lf") { e.preventDefault(); login(); } });
 document.addEventListener("click", e => {
@@ -69,6 +72,7 @@ document.addEventListener("click", e => {
   switch (d.act) {
     case "showpw": $("#pw").type = b.checked ? "text" : "password"; break;
     case "reset": { const em = $("#em").value.trim(); if (!em) return say("Isi email dulu."); sendPasswordResetEmail(auth, em).catch(() => {}).finally(() => say("Jika email terdaftar, tautan reset sudah dikirim.")); break; }
+    case "copyuid": navigator.clipboard?.writeText(user.uid).then(() => say("UID disalin.")); break;
     case "out": logA("Logout admin").finally(() => signOut(auth)); break;
     case "tab": tab = d.t; render(); break;
     case "saveC": { const o = { title: v("#c-t"), day: +$("#c-d").value, time: v("#c-h"), room: v("#c-r"), lecturer: v("#c-l") }; if (!o.title || !o.time) return say("Isi nama dan jam mulai.");
