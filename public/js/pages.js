@@ -38,6 +38,8 @@ export function nextWhen(w, r) { // tugas berulang: jadwal berikutnya yang masih
 const WHY = { "auth/operation-not-allowed": "Metode Anonymous belum diaktifkan di Firebase Authentication.", "auth/admin-restricted-operation": "Metode Anonymous belum diaktifkan di Firebase Authentication.",
   "auth/network-request-failed": "Tidak ada koneksi internet. Periksa jaringanmu.", "auth/too-many-requests": "Terlalu banyak percobaan dari jaringan ini. Tunggu beberapa menit lalu coba lagi.",
   "auth/invalid-api-key": "Konfigurasi Firebase belum benar (cek firebase-config.js).", "auth/unauthorized-domain": "Alamat web ini belum diizinkan di Firebase Authentication." };
+const why = e => WHY[e.code] || (/blocked/.test(e.code || "") ? "Login diblokir oleh pembatasan API key. Buka Google Cloud Console, APIs & Services, Credentials: izinkan alamat web ini dan Identity Toolkit API."
+  : e.code === "auth/internal-error" ? "Kesalahan internal saat login. Biasanya karena pembatasan API key atau pemblokir konten di browser." : "Terjadi kesalahan tak terduga.");
 export const boot = err => err
-  ? `<div class="login"><span class="logo">K</span><h1>Belum bisa masuk</h1><p class="muted">${esc(WHY[err.code] || "Terjadi kesalahan tak terduga.")}</p><button class="btn" data-act="retry">Coba lagi</button><p class="muted" style="font-size:12px">Kode: ${esc(err.code || "tidak diketahui")}</p></div>`
+  ? `<div class="login"><span class="logo">K</span><h1>Belum bisa masuk</h1><p class="muted">${esc(why(err))}</p><button class="btn" data-act="retry">Coba lagi</button><p class="muted" style="font-size:12px">Kode: ${esc(err.code || "tidak diketahui")}</p><a class="link" href="cek.html">Jalankan pemeriksaan koneksi</a></div>`
   : '<div class="login"><span class="logo pulse">K</span><p class="muted">Memuat KampusPing...</p></div>';

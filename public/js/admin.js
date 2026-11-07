@@ -3,8 +3,8 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getAuth, setPersistence, browserSessionPersistence, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { getDatabase, ref, onValue, push, set, update, remove, get, query, limitToLast } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-database.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { esc } from "./util.js";
-const app = initializeApp(firebaseConfig, "admin"), auth = getAuth(app), db = getDatabase(app); // sesi terpisah dari web pengguna
+import { esc, fbCfg } from "./util.js";
+const app = initializeApp(fbCfg(firebaseConfig), "admin"), auth = getAuth(app), db = getDatabase(app); // sesi terpisah dari web pengguna
 setPersistence(auth, browserSessionPersistence); // sesi berakhir saat tab ditutup
 const $ = s => document.querySelector(s), root = $("#app"), toast = $("#toast");
 const DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"], TABS = [["mk", "Mata kuliah"], ["ann", "Pengumuman & pengaturan"], ["dat", "Data pengguna"], ["log", "Log aktivitas"]];
