@@ -13,7 +13,7 @@ add("Konfigurasi Firebase", !miss.length, miss.length ? "Belum terisi: " + miss.
 let ls = false; try { localStorage.setItem("kp-t", "1"); ls = localStorage.getItem("kp-t") === "1"; localStorage.removeItem("kp-t"); } catch { /* diblokir */ }
 const inapp = /FBAN|FBAV|Instagram|Line\/|Telegram|; wv\)/i.test(navigator.userAgent);
 add("Browser", navigator.onLine && ls && !!window.indexedDB, `${navigator.onLine ? "online" : "OFFLINE"} · penyimpanan ${ls ? "ok" : "DIBLOKIR"} · indexedDB ${window.indexedDB ? "ok" : "tidak ada"}${inapp ? " · browser dalam aplikasi (sebaiknya buka di Chrome/Safari)" : ""}`);
-const cfg = fbCfg(firebaseConfig); let host = ""; try { host = new URL(cfg.databaseURL).host; } catch { /* tidak valid */ }
+const cfg = fbCfg(firebaseConfig), key = (() => { try { return localStorage.getItem("kp-key") || ""; } catch { return ""; } })(), okKey = /^[A-Za-z0-9]{20,64}$/.test(key); let host = ""; try { host = new URL(cfg.databaseURL).host; } catch { /* tidak valid */ }
 add("Alamat database", /(firebasedatabase\.app|firebaseio\.com)$/.test(host), host || "databaseURL kosong atau tidak valid");
 if (host) {
   try { const r = await lim(fetch(`https://${host}/.json?shallow=true`, { cache: "no-store" }), 10000);
@@ -21,11 +21,15 @@ if (host) {
   catch (e) { add("Database terjangkau (HTTP)", false, e.code === "timeout" ? e.message : "Tidak terjangkau dari jaringan atau browser ini: alamat salah, atau diblokir jaringan/ekstensi.", "rest"); }
   const ws = await new Promise(done => { let d = false; const fin = v => { if (!d) { d = true; done(v); } };
     try { const s = new WebSocket(`wss://${host}/.ws?v=5&ns=${host.split(".")[0]}`); s.onopen = () => { fin(true); s.close(); }; s.onerror = () => fin(false); s.onclose = () => fin(false); setTimeout(() => fin(false), 6000); } catch { fin(false); } });
+  const rq = async (m, p, body) => { try { return (await lim(fetch(`https://${host}/${p}.json`, { method: m, body, cache: "no-store" }), 10000)).status; } catch (e) { return e.code === "timeout" ? "timeout" : "error"; } };
+  const rc = await rq("GET", "config");
+  add("Aturan: config bisa dibaca publik", rc === 200, rc === 200 ? "Aturan baru aktif" : rc === 401 ? "401: aturan lama masih aktif. Jalankan: firebase deploy --only database" : "Status " + rc, "rules");
+  if (okKey) { const wr = await rq("PUT", `users/${key}/focus/2000-01-01`, "0"); add("Aturan: tulis data pribadi", wr === 200, wr === 200 ? "Penulisan diizinkan" : wr === 401 ? "401: ditolak aturan. Deploy aturan terbaru: firebase deploy --only database" : "Status " + wr, "wr"); if (wr === 200) await rq("DELETE", `users/${key}/focus/2000-01-01`); }
   add("WebSocket ke database", ws, ws ? "Tersambung" : "Gagal atau lambat. Aplikasi jatuh ke long-polling (bisa lambat sampai sekitar 30 detik). Jaringan, ISP, atau ekstensi mungkin memblokir WebSocket.", "ws");
 }
 if (!miss.length) {
-  const db = getDatabase(initializeApp(cfg, "cek")), key = (() => { try { return localStorage.getItem("kp-key") || ""; } catch { return ""; } })(), paths = [["config", "config"], ["courses", "courses"]];
-  if (/^[A-Za-z0-9]{20,64}$/.test(key)) paths.push(["data kamu", "users/" + key]);
+  const db = getDatabase(initializeApp(cfg, "cek")), paths = [["config", "config"], ["courses", "courses"]];
+  if (okKey) paths.push(["data kamu", "users/" + key]);
   st.textContent = "Menguji pembacaan database (maksimal 40 detik)...";
   await Promise.all(paths.map(async ([n, p]) => {
     const t0 = Date.now();
@@ -35,7 +39,9 @@ if (!miss.length) {
 }
 await new Promise(r => setTimeout(r, 500));
 add("Pemblokiran keamanan (CSP)", !blocked.length, blocked.length ? blocked.slice(0, 5).join(" | ") : "Tidak ada permintaan yang diblokir");
-st.textContent = res.rest === false ? "Kesimpulan: database tidak ditemukan atau tidak terjangkau. Periksa URL di Firebase Console, Realtime Database, lalu samakan dengan databaseURL."
+st.textContent = res.rules === false ? "Kesimpulan: aturan database lama masih aktif. Jalankan: firebase deploy --only database (lalu muat ulang halaman ini)."
+  : res.wr === false ? "Kesimpulan: aturan database menolak penulisan data pribadi. Deploy ulang aturan terbaru: firebase deploy --only database."
+  : res.rest === false ? "Kesimpulan: database tidak ditemukan atau tidak terjangkau. Periksa URL di Firebase Console, Realtime Database, lalu samakan dengan databaseURL."
   : res.ws === false ? "Kesimpulan: WebSocket diblokir. Coba jaringan atau HP lain, dan matikan ekstensi pemblokir."
   : res.read === false ? "Kesimpulan: database ada tetapi tidak menjawab pembacaan. Cek App Check (harus Unenforced untuk Realtime Database) dan aturan database."
   : Object.values(res).every(Boolean) && !blocked.length ? "Kesimpulan: semua pemeriksaan lolos." : "Kesimpulan: lihat baris yang GAGAL di atas.";

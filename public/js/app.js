@@ -105,7 +105,7 @@ dlg.addEventListener("submit", async e => {
   catch { say("Gagal menyimpan. Periksa isian."); }
 });
 setInterval(() => { if (user && !document.hidden && $("#rows") && !dlg.open) $("#rows").innerHTML = V.rows(ctx()); }, 60000);
-S.setDbErr(() => say("Koneksi ke database bermasalah. Periksa internet atau aturan database."));
+S.setDbErr(e => say(e?.code === "PERMISSION_DENIED" || /permission/i.test(e?.message || "") ? "Ditolak oleh aturan database. Jalankan: firebase deploy --only database" : "Koneksi ke database bermasalah. Periksa internet."));
 setTimeout(() => { if (!conn) { slow = true; refresh(); } }, 4000);
 S.watchMe(user.uid, v => { me = v || {}; refresh(); });
 S.watchConn(v => { conn = v; refresh(); });
