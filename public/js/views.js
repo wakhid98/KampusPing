@@ -65,7 +65,18 @@ function listPage(c) {
   const fc = t === "class" ? "" : [["active", "Aktif"], ["done", "Selesai"], ["all", "Semua"]].map(chip).join("");
   const ls = t !== "task" ? "" : [["*all", "Semua daftar"], ["*star", "★ Berbintang"], ...lists(c.items).map(l => [l, esc(l)])].map(([l, n]) => `<button class="chip${c.lst === l ? " on" : ""}" data-act="lst" data-l="${esc(l)}">${n}</button>`).join("");
   const clr = t !== "class" && c.items.some(x => x.type === t && x.done) ? '<button class="btn ghost" data-act="clearDone">Hapus yang selesai</button>' : "";
-  return `<div class="tools"><input class="search" id="q" type="search" placeholder="Cari..." value="${esc(c.q)}" aria-label="Cari">${fc}</div>${ls || clr ? `<div class="tools">${ls}${clr}</div>` : ""}<div id="rows">${rows(c)}</div>`;
+  return `${t === "scholar" ? scholarCard(c) : ""}<div class="tools"><input class="search" id="q" type="search" placeholder="Cari..." value="${esc(c.q)}" aria-label="Cari">${fc}</div>${ls || clr ? `<div class="tools">${ls}${clr}</div>` : ""}<div id="rows">${rows(c)}</div>`;
+}
+function scholarCard(c) {
+  const have = new Set(c.items.filter(x => x.type === "scholar").map(x => x.title.toLowerCase())), td = new Date(Date.now() + 252e5).toISOString().slice(0, 10);
+  const L = c.scholars.filter(s => !s.d || s.d >= td).sort((a, b) => (a.d || "9999").localeCompare(b.d || "9999")).slice(0, 15);
+  const up = c.smeta.updated ? new Date(c.smeta.updated).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }) + " WIB" : "";
+  const row = s => {
+    const r = s.d ? rel(Date.parse(s.d + "T23:59:00+07:00")) : null, url = /^https?:\/\//.test(s.u) ? s.u : "";
+    const tutup = s.d ? "Tutup " + new Date(s.d + "T12:00:00Z").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) + (s.ap ? " (perkiraan)" : "") : "Tanggal belum terdeteksi, cek situs resmi";
+    return `<div class="item"><div class="grow"><b>${esc(s.t)}</b><small>${esc(s.s || "")} · ${tutup}</small></div>${r ? `<span class="badge ${r[1]}">${r[0]}</span>` : ""}${url ? `<a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Buka</a>` : ""}${s.d ? (have.has(s.t.toLowerCase().slice(0, 120)) ? '<span class="badge ok">Dipantau</span>' : `<button class="btn" data-act="track" data-id="${esc(s.id)}">Pantau</button>`) : ""}</div>`;
+  };
+  return `<div class="card stack" style="margin-bottom:16px"><div class="row2"><h3 style="margin:0">Beasiswa aktif, dicarikan otomatis</h3><small class="muted">${up ? "Diperbarui " + up : "Belum ada pembaruan"}</small></div>${L.map(row).join("") || '<p class="muted">Belum ada hasil. Pencarian berjalan otomatis tiap pagi dan setiap kali web diperbarui.</p>'}<small class="muted">Diambil otomatis dari berita dan sumber terbuka. Selalu cek situs resmi sebelum mendaftar.</small></div>`;
 }
 function attBlock(c, x) {
   const W = new Date(Date.now() + 252e5), td = W.toISOString().slice(0, 10), rec = (c.me.attend || {})[x.id] || {}, v = Object.values(rec), pct = v.length ? Math.round(v.filter(s => s === "h").length / v.length * 100) : null;

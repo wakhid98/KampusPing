@@ -6,12 +6,12 @@ import * as V from "./views.js";
 import * as G from "./pages.js";
 const $ = s => document.querySelector(s), root = $("#app"), dlg = $("#dlg"), toast = $("#toast"), overlay = $("#gate");
 const user = { uid: S.deviceKey() };
-let me = {}, items = [], courses = [], cfg = {}, view = "home", q = "", flt = "active", lst = "*all", calOff = 0, calSel = "", tmr, undo, first = true, conn = false, slow = false;
+let me = {}, items = [], courses = [], scholars = [], smeta = {}, cfg = {}, view = "home", q = "", flt = "active", lst = "*all", calOff = 0, calSel = "", tmr, undo, first = true, conn = false, slow = false;
 const ft = { left: 1500, run: false, mode: 25, brk: false, h: null };
 const setTheme = n => { const t = n || (document.documentElement.dataset.theme === "light" ? "dark" : "light"); document.documentElement.dataset.theme = t; try { localStorage.setItem("kp-theme", t); } catch { /* penyimpanan dinonaktifkan */ } };
 try { setTheme(localStorage.getItem("kp-theme") || "light"); } catch { setTheme("light"); }
 const seenWelcome = () => { try { return localStorage.getItem("kp-welcome"); } catch { return 1; } };
-const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, ft, calOff, calSel, conn, slow });
+const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, ft, calOff, calSel, conn, slow, scholars, smeta });
 const render = () => { root.innerHTML = V.shell(ctx()); };
 const refresh = () => { if (dlg.open) return; const k = $("#q"), pos = k?.selectionStart; render(); if (k && $("#q")) { $("#q").focus(); $("#q").setSelectionRange(pos, pos); } };
 function say(msg, fn) { clearTimeout(tmr); undo = fn; toast.innerHTML = `<span>${esc(msg)}</span>${fn ? '<button data-act="undo">Urungkan</button>' : ""}`; toast.className = "show"; tmr = setTimeout(() => toast.className = "", 6000); }
@@ -68,6 +68,7 @@ document.addEventListener("click", async e => {
     case "clearDone": { const n = items.filter(x => x.done); if (!n.length) say("Tidak ada item selesai."); else if (confirm(`Hapus ${n.length} item yang sudah selesai? Ini tidak bisa diurungkan.`)) { await Promise.all(n.map(x => S.delItem(user.uid, x.id))); say(`${n.length} item dihapus.`); } break; }
     case "att": { const k = day(0), cur = me.attend || {}; me.attend = { ...cur, [id]: { ...(cur[id] || {}), [k]: d.s } }; await S.patchMe(user.uid, { attend: { [id]: { [k]: d.s } } }); say("Presensi dicatat."); refresh(); break; }
     case "start": try { localStorage.setItem("kp-welcome", "1"); } catch { /* abaikan */ } overlay.hidden = true; break;
+    case "track": { const s = scholars.find(x => x.id === id); if (!s || !s.d) return; await S.addItem(user.uid, { type: "scholar", title: s.t.slice(0, 120), when: s.d + "T23:59", step: "Cek persyaratan di situs resmi", link: /^https:\/\//.test(s.u) ? s.u.slice(0, 300) : "" }); say("Ditambahkan ke Radar Beasiswa."); break; }
     case "calNav": calOff += +d.n; render(); break;
     case "calToday": calOff = 0; calSel = ""; render(); break;
     case "calDay": calSel = d.d; render(); break;
@@ -111,6 +112,8 @@ S.watchMe(user.uid, v => { me = v || {}; refresh(); });
 S.watchConn(v => { conn = v; refresh(); });
 S.watchCourses(a => { courses = a; refresh(); });
 S.watchCfg(c => { cfg = c; refresh(); });
+S.watchScholars(a => { scholars = a; refresh(); });
+S.watchScholarMeta(m => { smeta = m; refresh(); });
 S.watchItems(user.uid, arr => {
   items = arr;
   if (first) { first = false; if (!arr.length && !seenWelcome()) { overlay.hidden = false; overlay.innerHTML = G.welcome(); } }

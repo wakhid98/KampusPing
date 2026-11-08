@@ -1,0 +1,18 @@
+name: beasiswa
+on:
+  push:
+    branches: [main]
+  schedule: [{ cron: "30 22 * * *" }]   # 05:30 WIB setiap hari
+  workflow_dispatch:
+concurrency: beasiswa
+jobs:
+  cari:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: cd scripts && npm install --no-audit --no-fund && node beasiswa.js
+        env:
+          FIREBASE_SA: ${{ secrets.FIREBASE_SA }}
+          DB_URL: ${{ secrets.DB_URL }}
