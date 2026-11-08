@@ -1,1 +1,2 @@
-{"name":"KampusPing","short_name":"KampusPing","start_url":"/","display":"standalone","background_color":"#0f1226","theme_color":"#0f1226"}
+{"id":"/","name":"KampusPing","short_name":"KampusPing","description":"Pengingat jadwal, tugas, dan beasiswa kuliah","lang":"id","start_url":"/","scope":"/","display":"standalone","orientation":"portrait","background_color":"#f3f7ff","theme_color":"#2563eb","categories":["education","productivity"],
+ "icons":[{"src":"icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},{"src":"icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},{"src":"icons/maskable-512.png","sizes":"512x512","type":"image/png","purpose":"maskable"}]}

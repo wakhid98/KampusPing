@@ -1,5 +1,5 @@
 import * as S from "./store.js";
-import { esc } from "./util.js";
+import { esc, keepForm } from "./util.js";
 import { VAPID } from "./firebase-config.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
 import * as V from "./views.js";
@@ -11,9 +11,12 @@ const ft = { left: 1500, run: false, mode: 25, brk: false, h: null };
 const setTheme = n => { const t = n || (document.documentElement.dataset.theme === "light" ? "dark" : "light"); document.documentElement.dataset.theme = t; try { localStorage.setItem("kp-theme", t); } catch { /* penyimpanan dinonaktifkan */ } };
 try { setTheme(localStorage.getItem("kp-theme") || "light"); } catch { setTheme("light"); }
 const seenWelcome = () => { try { return localStorage.getItem("kp-welcome"); } catch { return 1; } };
-const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, ft, calOff, calSel, conn, slow, scholars, smeta });
+const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, ft, calOff, calSel, conn, slow, scholars, smeta, canInstall: !!installEv });
 const render = () => { root.innerHTML = V.shell(ctx()); };
-const refresh = () => { if (dlg.open) return; const k = $("#q"), pos = k?.selectionStart; render(); if (k && $("#q")) { $("#q").focus(); $("#q").setSelectionRange(pos, pos); } };
+const refresh = () => { if (!dlg.open) keepForm(root, render); };
+let installEv = null;
+window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEv = e; refresh(); });
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("firebase-messaging-sw.js").catch(() => { /* tanpa service worker, web tetap jalan */ });
 function say(msg, fn) { clearTimeout(tmr); undo = fn; toast.innerHTML = `<span>${esc(msg)}</span>${fn ? '<button data-act="undo">Urungkan</button>' : ""}`; toast.className = "show"; tmr = setTimeout(() => toast.className = "", 6000); }
 const find = id => items.find(x => x.id === id);
 const day = n => new Date(Date.now() + 252e5 - n * 864e5).toISOString().slice(0, 10);
@@ -69,6 +72,7 @@ document.addEventListener("click", async e => {
     case "att": { const k = day(0), cur = me.attend || {}; me.attend = { ...cur, [id]: { ...(cur[id] || {}), [k]: d.s } }; await S.patchMe(user.uid, { attend: { [id]: { [k]: d.s } } }); say("Presensi dicatat."); refresh(); break; }
     case "start": try { localStorage.setItem("kp-welcome", "1"); } catch { /* abaikan */ } overlay.hidden = true; break;
     case "track": { const s = scholars.find(x => x.id === id); if (!s || !s.d) return; await S.addItem(user.uid, { type: "scholar", title: s.t.slice(0, 120), when: s.d + "T23:59", step: "Cek persyaratan di situs resmi", link: /^https:\/\//.test(s.u) ? s.u.slice(0, 300) : "" }); say("Ditambahkan ke Radar Beasiswa."); break; }
+    case "install": installEv?.prompt(); installEv = null; refresh(); break;
     case "calNav": calOff += +d.n; render(); break;
     case "calToday": calOff = 0; calSel = ""; render(); break;
     case "calDay": calSel = d.d; render(); break;

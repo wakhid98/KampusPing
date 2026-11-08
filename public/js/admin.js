@@ -2,7 +2,7 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getAuth, setPersistence, browserSessionPersistence, signInWithEmailAndPassword, sendPasswordResetEmail, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
-import { esc, fbCfg } from "./util.js";
+import { esc, fbCfg, keepForm } from "./util.js";
 const cfg = fbCfg(firebaseConfig), auth = getAuth(initializeApp(cfg, "admin")); // sesi terpisah dari web pengguna
 setPersistence(auth, browserSessionPersistence); // sesi berakhir saat tab ditutup
 const $ = s => document.querySelector(s), root = $("#app"), toast = $("#toast");
@@ -19,11 +19,11 @@ async function rq(m, p, body, q = "") {
   return r.json();
 }
 const kick = () => pollers.forEach(f => f());
-const watch = (p, cb, q = "") => { const go = () => rq("GET", p, undefined, q).then(v => cb(v || {})).catch(() => {}); pollers.push(go); timers.push(setInterval(go, 6000)); go(); };
+const watch = (p, cb, q = "") => { let sig; const go = () => rq("GET", p, undefined, q).then(v => { const s = JSON.stringify(v); if (s !== sig) { sig = s; cb(v || {}); } }).catch(() => {}); pollers.push(go); timers.push(setInterval(go, 6000)); go(); };
 const put = (p, v) => rq("PUT", p, v), del = p => rq("DELETE", p);
 const say = m => { toast.textContent = m; toast.className = "show"; setTimeout(() => toast.className = "", 4500); };
 const logA = a => rq("POST", "audit", { t: Date.now(), by: user?.email || "?", a: String(a).slice(0, 200) }).catch(() => {});
-const run = (p, m, a) => p.then(() => { say(m); logA(a || m); kick(); }).catch(() => say("Gagal. Periksa izin admin."));
+const run = (p, m, a, clear) => p.then(() => { say(m); logA(a || m); kick(); if (clear) render(); }).catch(() => say("Gagal. Periksa izin admin."));
 const bump = () => { clearTimeout(idle); if (adm === true) idle = setTimeout(() => { signOut(auth); say("Sesi berakhir karena tidak aktif."); }, 15 * 60e3); };
 ["click", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, bump, { passive: true }));
 const f = (l, id, v = "", a = "") => `<label>${l}<input id="${id}" value="${esc(v)}" ${a}></label>`;
@@ -55,7 +55,8 @@ function dat() {
   ${U.map(([id, u]) => `<div class="item"><div class="grow"><b>Pengguna ${esc(id.slice(0, 6))}</b><small>${n(id)} item · streak ${esc(u.streak || 0)} · aksi terakhir ${esc(u.lastDone || "-")}</small></div><button class="btn danger" data-act="delUser" data-id="${esc(id)}">Hapus data</button></div>`).join("") || '<div class="empty">Belum ada pengguna.</div>'}`;
 }
 const logv = () => Object.values(D.audit).sort((a, b) => b.t - a.t).map(x => `<div class="item"><div class="grow"><b>${esc(x.a)}</b><small>${esc(new Date(x.t).toLocaleString("id-ID"))} · ${esc(x.by)}</small></div></div>`).join("") || '<div class="empty">Belum ada aktivitas tercatat.</div>';
-function render() {
+function render(soft) { if (soft) keepForm(root, draw); else draw(); }
+function draw() {
   if (!user) return root.innerHTML = `<div class="login"><span class="logo">${shield}</span><h1>Masuk Admin</h1><p class="muted">Area khusus pengelola KampusPing. Semua aktivitas dicatat.</p>
   <form id="lf" class="stack" style="width:100%;text-align:left"><label>Email<input id="em" type="email" autocomplete="username" required maxlength="120"></label><label>Kata sandi<input id="pw" type="password" autocomplete="current-password" required maxlength="128"></label>
   <label class="sw"><input type="checkbox" data-act="showpw"> Tampilkan kata sandi</label><button class="btn big">Masuk</button></form>
@@ -70,9 +71,9 @@ function render() {
 }
 function listen() {
   if (listening) return; listening = true;
-  for (const [k, p] of [["courses", "courses"], ["config", "config"], ["sch", "scholarships"], ["meta", "scholarMeta"]]) watch(p, v => { D[k] = v; render(); });
-  for (const k of ["users", "items"]) watch(k, v => { D[k] = v; if (tab === "dat") render(); });
-  watch("audit", v => { D.audit = v; if (tab === "log") render(); }, "&orderBy=%22%24key%22&limitToLast=50");
+  for (const [k, p] of [["courses", "courses"], ["config", "config"], ["sch", "scholarships"], ["meta", "scholarMeta"]]) watch(p, v => { D[k] = v; render(true); });
+  for (const k of ["users", "items"]) watch(k, v => { D[k] = v; if (tab === "dat") render(true); });
+  watch("audit", v => { D.audit = v; if (tab === "log") render(true); }, "&orderBy=%22%24key%22&limitToLast=50");
 }
 const check = () => {
   adm = null; render();
@@ -97,7 +98,7 @@ document.addEventListener("click", e => {
     case "out": Promise.race([logA("Logout admin"), new Promise(r => setTimeout(r, 1500))]).finally(() => signOut(auth)); break;
     case "tab": tab = d.t; render(); break;
     case "saveC": { const o = { title: v("#c-t"), day: +$("#c-d").value, time: v("#c-h"), room: v("#c-r"), lecturer: v("#c-l") }; if (!o.title || !o.time) return say("Isi nama dan jam mulai.");
-      run(edit ? Promise.all(Object.entries(o).map(([k, x]) => put(`courses/${edit}/${k}`, x))) : rq("POST", "courses", o), "Mata kuliah tersimpan.", `${edit ? "Ubah" : "Tambah"} mata kuliah: ${o.title}`); edit = null; break; }
+      run(edit ? Promise.all(Object.entries(o).map(([k, x]) => put(`courses/${edit}/${k}`, x))) : rq("POST", "courses", o), "Mata kuliah tersimpan.", `${edit ? "Ubah" : "Tambah"} mata kuliah: ${o.title}`, true); edit = null; break; }
     case "editC": edit = d.id; render(); break; case "cancelC": edit = null; render(); break;
     case "delC": if (confirm("Hapus mata kuliah ini?")) run(del(`courses/${d.id}`), "Mata kuliah dihapus.", `Hapus mata kuliah: ${D.courses[d.id]?.title || d.id}`); break;
     case "post": { const t = v("#a-t"); if (t) run(put("config/announce", { id: Date.now(), text: t.slice(0, 500) }), "Pengumuman diterbitkan.", "Terbitkan pengumuman"); break; }
