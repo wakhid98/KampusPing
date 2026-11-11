@@ -6,12 +6,12 @@ import * as V from "./views.js";
 import * as G from "./pages.js";
 const $ = s => document.querySelector(s), root = $("#app"), dlg = $("#dlg"), toast = $("#toast"), overlay = $("#gate");
 const user = { uid: S.deviceKey() };
-let me = {}, items = [], courses = [], scholars = [], smeta = {}, cfg = {}, view = "home", q = "", flt = "active", lst = "*all", calOff = 0, calSel = "", tmr, undo, first = true, conn = false, slow = false;
+let me = {}, items = [], courses = [], scholars = [], smeta = {}, sems = [], semSel = "", schDay = null, cfg = {}, view = "home", q = "", flt = "active", lst = "*all", calOff = 0, calSel = "", tmr, undo, first = true, conn = false, slow = false;
 const ft = { left: 1500, run: false, mode: 25, brk: false, h: null };
 const setTheme = n => { const t = n || (document.documentElement.dataset.theme === "light" ? "dark" : "light"); document.documentElement.dataset.theme = t; try { localStorage.setItem("kp-theme", t); } catch { /* penyimpanan dinonaktifkan */ } };
 try { setTheme(localStorage.getItem("kp-theme") || "light"); } catch { setTheme("light"); }
 const seenWelcome = () => { try { return localStorage.getItem("kp-welcome"); } catch { return 1; } };
-const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, ft, calOff, calSel, conn, slow, scholars, smeta, canInstall: !!installEv });
+const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, ft, calOff, calSel, conn, slow, scholars, smeta, canInstall: !!installEv, sems, semSel, schDay });
 const render = () => { root.innerHTML = V.shell(ctx()); };
 const refresh = () => { if (!dlg.open) keepForm(root, render); };
 let installEv = null;
@@ -73,6 +73,8 @@ document.addEventListener("click", async e => {
     case "start": try { localStorage.setItem("kp-welcome", "1"); } catch { /* abaikan */ } overlay.hidden = true; break;
     case "track": { const s = scholars.find(x => x.id === id); if (!s || !s.d) return; await S.addItem(user.uid, { type: "scholar", title: s.t.slice(0, 120), when: s.d + "T23:59", step: "Cek persyaratan di situs resmi", link: /^https:\/\//.test(s.u) ? s.u.slice(0, 300) : "" }); say("Ditambahkan ke Radar Beasiswa."); break; }
     case "install": installEv?.prompt(); installEv = null; refresh(); break;
+    case "semSel": semSel = d.s; render(); break;
+    case "schDay": schDay = +d.d; render(); break;
     case "calNav": calOff += +d.n; render(); break;
     case "calToday": calOff = 0; calSel = ""; render(); break;
     case "calDay": calSel = d.d; render(); break;
@@ -81,7 +83,8 @@ document.addEventListener("click", async e => {
     case "ftToggle": ft.run = !ft.run; clearInterval(ft.h); if (ft.run) ft.h = setInterval(tick, 1000); render(); break;
     case "ftReset": clearInterval(ft.h); Object.assign(ft, { run: false, brk: false, left: ft.mode * 60 }); render(); break;
     case "ftMode": clearInterval(ft.h); Object.assign(ft, { mode: +d.m, run: false, brk: false, left: +d.m * 60 }); render(); break;
-    case "gAdd": me.grades = [...(me.grades || []), { name: "", sks: 2, nilai: "A" }]; S.patchMe(user.uid, { grades: me.grades }); render(); break;
+    case "gAdd": me.grades = [...(me.grades || []), { name: "", sks: 2, nilai: "A", smt: +d.s || 1 }]; S.patchMe(user.uid, { grades: me.grades }); render(); break;
+    case "gSem": { const next = Math.max(0, ...(me.grades || []).map(x => x.smt || 1)) + 1; if (next > 14) return say("Maksimal 14 semester."); me.grades = [...(me.grades || []), { name: "", sks: 2, nilai: "A", smt: next }]; S.patchMe(user.uid, { grades: me.grades }); render(); break; }
     case "gDel": me.grades = (me.grades || []).filter((_, i) => i !== +d.i); S.patchMe(user.uid, { grades: me.grades }); render(); break;
   }
 });
@@ -90,7 +93,7 @@ document.addEventListener("change", e => {
   const t = e.target.dataset;
   if (t.pref) prefs({ [t.pref]: e.target.checked }).then(() => say("Pengaturan disimpan."));
   if (t.import) { const f = e.target.files[0]; if (f) f.text().then(x => S.restore(user.uid, JSON.parse(x))).then(() => say("Data dipulihkan.")).catch(() => say("File cadangan tidak valid.")); }
-  if (t.g) { const [i, k] = t.g.split("."), g = [...(me.grades || [])]; g[i] = { ...g[i], [k]: k === "sks" ? +e.target.value : e.target.value }; me.grades = g; S.patchMe(user.uid, { grades: g }); $("#ipk").textContent = G.calc(g); }
+  if (t.g) { const [i, k] = t.g.split("."), g = [...(me.grades || [])]; g[i] = { ...g[i], [k]: k === "sks" ? +e.target.value : e.target.value }; me.grades = g; S.patchMe(user.uid, { grades: g }); refresh(); }
 });
 document.addEventListener("submit", e => {
   if (e.target.id !== "qa") return; e.preventDefault(); const v = $("#qa-t").value.trim(); if (!v) return;
@@ -117,6 +120,7 @@ S.watchConn(v => { conn = v; refresh(); });
 S.watchCourses(a => { courses = a; refresh(); });
 S.watchCfg(c => { cfg = c; refresh(); });
 S.watchScholars(a => { scholars = a; refresh(); });
+S.watchSemesters(a => { sems = a; refresh(); });
 S.watchScholarMeta(m => { smeta = m; refresh(); });
 S.watchItems(user.uid, arr => {
   items = arr;

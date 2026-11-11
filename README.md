@@ -31,3 +31,8 @@ Web ini sudah siap dipasang sebagai aplikasi (ikon, manifest, service worker, ha
 4. Di dalam zip: file `.apk` (untuk dipasang langsung di HP), `.aab` (untuk Play Store), keystore + `signing-key-info.txt` (SIMPAN, jangan hilang), dan `assetlinks.json`.
 5. Isi file `public/.well-known/assetlinks.json` di proyek ini dengan isi `assetlinks.json` dari zip, lalu deploy hosting lagi. Ini menghilangkan bilah alamat sehingga tampil layar penuh seperti aplikasi.
 6. Kirim `.apk` ke HP dan pasang (izinkan "pasang dari sumber tidak dikenal").
+
+## Semester dan SIAKAD (v16)
+- Admin: Dasbor Admin, tab Mata kuliah, bagian **Semester**. Semester pertama otomatis aktif dan mengambil mata kuliah yang sudah ada. Tombol **Tambah semester berikutnya** membuat semester baru; ganti yang aktif dengan **Jadikan aktif**. Hanya jadwal semester aktif yang dipakai di beranda, kalender, dan notifikasi.
+- Mahasiswa: tab Nilai kini per semester (IPS tiap semester + IPK kumulatif) dengan tombol **+ Semester berikutnya**.
+- Tombol **Buka SIAKAD** di halaman Jadwal membuka SIAKAD di tab baru. SIAKAD butuh login dan tidak bisa ditanam di dalam web ini.

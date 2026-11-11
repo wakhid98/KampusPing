@@ -1,7 +1,7 @@
 import { esc } from "./util.js";
 export const mmss = s => `${String(s / 60 | 0).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 const SC = { A: 4, "B+": 3.5, B: 3, "C+": 2.5, C: 2, D: 1, E: 0 };
-export const calc = g => { const s = g.reduce((a, x) => a + (+x.sks || 0), 0); return s ? (g.reduce((a, x) => a + (+x.sks || 0) * (SC[x.nilai] ?? 0), 0) / s).toFixed(2) : "0.00"; };
+export const calc = (g, smt) => { const r = smt == null ? g : g.filter(x => (x.smt || 1) === smt), t = r.reduce((a, x) => a + (+x.sks || 0), 0); return t ? (r.reduce((a, x) => a + (+x.sks || 0) * (SC[x.nilai] ?? 0), 0) / t).toFixed(2) : "0.00"; };
 export function fokus(c) {
   const f = c.me.focus || {}, k = n => new Date(Date.now() + 252e5 - n * 864e5).toISOString().slice(0, 10), t = c.ft;
   let wk = 0; for (let i = 0; i < 7; i++) wk += f[k(i)] || 0;
@@ -11,11 +11,12 @@ export function fokus(c) {
   <div class="card s2"><h3>Sesi hari ini</h3><div class="num">${f[k(0)] || 0}</div><p class="muted">${wk} sesi dalam 7 hari</p></div></div>`;
 }
 export function ipk(c) {
-  const g = c.me.grades || [];
-  return `<div class="card stack"><div class="row2"><div><h3>IPK / IPS</h3><div class="num" id="ipk">${calc(g)}</div></div><button class="btn" data-act="gAdd">+ Mata kuliah</button></div>
-  ${g.map((x, i) => `<div class="grow-g"><input data-g="${i}.name" value="${esc(x.name)}" placeholder="Mata kuliah" aria-label="Nama"><input data-g="${i}.sks" type="number" min="1" max="6" value="${x.sks}" aria-label="SKS">
-  <select data-g="${i}.nilai" aria-label="Nilai">${Object.keys(SC).map(n => `<option${n === x.nilai ? " selected" : ""}>${n}</option>`).join("")}</select><button class="ib" data-act="gDel" data-i="${i}" aria-label="Hapus">✕</button></div>`).join("")
-  || '<p class="muted">Tambahkan mata kuliah dan nilainya. Skala: A=4, B+=3,5, B=3, C+=2,5, C=2, D=1, E=0.</p>'}</div>`;
+  const g = c.me.grades || [], smts = [...new Set(g.map(x => x.smt || 1))].sort((a, b) => a - b);
+  const row = (x, i) => `<div class="grow-g"><input data-g="${i}.name" value="${esc(x.name)}" placeholder="Mata kuliah" aria-label="Nama" maxlength="100"><input data-g="${i}.sks" type="number" min="1" max="6" value="${esc(x.sks)}" aria-label="SKS">
+  <select data-g="${i}.nilai" aria-label="Nilai">${Object.keys(SC).map(n => `<option${n === x.nilai ? " selected" : ""}>${n}</option>`).join("")}</select><button class="ib" data-act="gDel" data-i="${i}" aria-label="Hapus">✕</button></div>`;
+  const blocks = smts.map(s => `<div class="card stack"><div class="row2"><h3 style="margin:0">Semester ${s}</h3><div class="actions"><span class="badge">IPS ${calc(g, s)}</span><button class="btn ghost" data-act="gAdd" data-s="${s}">+ Mata kuliah</button></div></div>${g.map((x, i) => (x.smt || 1) === s ? row(x, i) : "").join("")}</div>`).join("");
+  return `<div class="card"><div class="row2"><div><h3>IPK kumulatif</h3><div class="num" id="ipk">${calc(g)}</div></div><button class="btn" data-act="gSem">+ Semester berikutnya</button></div></div>
+  <div class="stack" style="margin-top:14px">${blocks || '<div class="empty"><p>Belum ada nilai. Mulai dari semester pertama. Skala: A=4, B+=3,5, B=3, C+=2,5, C=2, D=1, E=0.</p><button class="btn" data-act="gSem">Tambah semester 1</button></div>'}</div>`;
 }
 // Tambah tugas cepat: "Laporan fisika besok 23.59" -> judul + deadline (WIB)
 export function quick(txt) {

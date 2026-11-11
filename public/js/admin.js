@@ -7,7 +7,8 @@ const cfg = fbCfg(firebaseConfig), auth = getAuth(initializeApp(cfg, "admin")); 
 setPersistence(auth, browserSessionPersistence); // sesi berakhir saat tab ditutup
 const $ = s => document.querySelector(s), root = $("#app"), toast = $("#toast");
 const DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"], TABS = [["mk", "Mata kuliah"], ["ann", "Pengumuman & pengaturan"], ["sch", "Beasiswa"], ["dat", "Data pengguna"], ["log", "Log aktivitas"]];
-let user = null, adm = null, why2 = "", tab = "mk", edit = null, listening = false, idle, timers = [], pollers = [], D = { courses: {}, config: {}, users: {}, items: {}, audit: {}, sch: {}, meta: {} };
+let user = null, adm = null, why2 = "", tab = "mk", edit = null, listening = false, idle, timers = [], pollers = [], D = { courses: {}, config: {}, users: {}, items: {}, audit: {}, sch: {}, meta: {}, sems: {} };
+let semF = "";
 let fails = 0, until = 0; try { fails = +localStorage.getItem("kp-f") || 0; until = +localStorage.getItem("kp-u") || 0; } catch { /* penyimpanan dinonaktifkan */ }
 const keep = () => { try { localStorage.setItem("kp-f", fails); localStorage.setItem("kp-u", until); } catch { /* abaikan */ } };
 // ---- akses database lewat REST dengan token admin
@@ -28,17 +29,24 @@ const bump = () => { clearTimeout(idle); if (adm === true) idle = setTimeout(() 
 ["click", "keydown", "touchstart"].forEach(ev => document.addEventListener(ev, bump, { passive: true }));
 const f = (l, id, v = "", a = "") => `<label>${l}<input id="${id}" value="${esc(v)}" ${a}></label>`;
 const shield = '<svg viewBox="0 0 24 24" width="30" height="30" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg>';
+const semList = () => Object.entries(D.sems).sort((a, b) => a[1].order - b[1].order);
 function mk() {
-  const e = edit ? D.courses[edit] || {} : {}, rows = Object.entries(D.courses).sort((a, b) => a[1].day - b[1].day || String(a[1].time).localeCompare(b[1].time));
-  return `<div class="card stack"><h3>${edit ? "Ubah" : "Tambah"} mata kuliah</h3><div class="fgrid">${f("Mata kuliah", "c-t", e.title, 'maxlength="100"')}
+  const act = D.config.activeSemester || "", S = semList(), e = edit ? D.courses[edit] || {} : {}, defS = e.sem ?? (act || S[0]?.[0] || "");
+  const rows = Object.entries(D.courses).filter(([, x]) => !semF || x.sem === semF).sort((a, b) => a[1].day - b[1].day || String(a[1].time).localeCompare(b[1].time));
+  const semCard = `<div class="card stack"><h3>Semester</h3>${S.map(([id, s]) => `<div class="row2"><span><b>${esc(s.name)}</b> ${id === act ? '<span class="badge ok">Aktif</span>' : ""}</span><span class="actions">${id === act ? "" : `<button class="btn ghost" data-act="actSem" data-id="${esc(id)}">Jadikan aktif</button>`}<button class="btn danger" data-act="delSem" data-id="${esc(id)}">Hapus</button></span></div>`).join("") || '<p class="muted">Belum ada semester. Tambahkan yang pertama: mata kuliah yang sudah ada otomatis masuk ke semester ini.</p>'}
+  <div class="fgrid">${f("Nama semester", "sem-n", "", `maxlength="60" placeholder="mis. Semester ${S.length + 1} · 2026/2027"`)}</div><div class="actions" style="justify-content:flex-start"><button class="btn" data-act="addSem">Tambah semester berikutnya</button></div></div>`;
+  const chips = S.length ? `<div class="tools"><button class="chip${semF ? "" : " on"}" data-act="semF" data-id="">Semua</button>${S.map(([id, s]) => `<button class="chip${semF === id ? " on" : ""}" data-act="semF" data-id="${esc(id)}">${esc(s.name)}</button>`).join("")}</div>` : "";
+  return `${semCard}<div class="card stack" style="margin-top:14px"><h3>${edit ? "Ubah" : "Tambah"} mata kuliah</h3><div class="fgrid">${f("Mata kuliah", "c-t", e.title, 'maxlength="100"')}
+  <label>Semester<select id="c-s">${S.map(([id, s]) => `<option value="${esc(id)}"${id === defS ? " selected" : ""}>${esc(s.name)}</option>`).join("") || '<option value="">(belum ada)</option>'}</select></label>
   <label>Hari<select id="c-d">${DAYS.map((d, i) => `<option value="${i}"${i === (e.day ?? 1) ? " selected" : ""}>${d}</option>`).join("")}</select></label>
   ${f("Jam mulai", "c-h", e.time, 'type="time"')}${f("Ruang", "c-r", e.room, 'maxlength="60"')}${f("Dosen", "c-l", e.lecturer, 'maxlength="80"')}</div>
   <div class="actions" style="justify-content:flex-start"><button class="btn" data-act="saveC">Simpan</button>${edit ? '<button class="btn ghost" data-act="cancelC">Batal</button>' : ""}</div></div>
-  <div style="margin-top:14px">${rows.map(([id, x]) => `<div class="item"><div class="dayb">${DAYS[x.day].slice(0, 3)}</div><div class="grow"><b>${esc(x.title)}</b><small>${esc(x.time)}${x.room ? " · " + esc(x.room) : ""}${x.lecturer ? " · " + esc(x.lecturer) : ""}</small></div>
+  <div style="margin-top:14px">${chips}${rows.map(([id, x]) => `<div class="item"><div class="dayb">${DAYS[x.day].slice(0, 3)}</div><div class="grow"><b>${esc(x.title)}</b><small>${esc(x.time)}${x.room ? " · " + esc(x.room) : ""}${x.lecturer ? " · " + esc(x.lecturer) : ""}${x.sem && D.sems[x.sem] ? " · " + esc(D.sems[x.sem].name) : ""}</small></div>
   <button class="btn ghost" data-act="editC" data-id="${esc(id)}">Ubah</button><button class="btn danger" data-act="delC" data-id="${esc(id)}">Hapus</button></div>`).join("") || '<div class="empty">Belum ada mata kuliah.</div>'}</div>`;
 }
 const ann = () => { const c = D.config; return `<div class="stack"><div class="card stack"><h3>Pengumuman untuk semua pengguna</h3><textarea id="a-t" rows="3" maxlength="500">${esc(c.announce?.text || "")}</textarea>
   <div class="actions" style="justify-content:flex-start"><button class="btn" data-act="post">Terbitkan</button><button class="btn danger" data-act="delAnn">Hapus pengumuman</button></div></div>
+  <div class="card stack"><h3>Alamat SIAKAD kampus</h3><p class="muted">Tombol "Buka SIAKAD" di halaman Jadwal mengarah ke sini. Kosongkan untuk memakai alamat bawaan.</p><label>URL (https)<input id="siakad" value="${esc(c.siakadUrl || "")}" maxlength="300" placeholder="https://siakad.polinema.ac.id/beranda"></label><div class="actions" style="justify-content:flex-start"><button class="btn" data-act="saveSiakad">Simpan</button></div></div>
   <div class="card stack"><h3>Jam tenang (tanpa notifikasi)</h3><div class="fgrid">${f("Mulai (jam)", "q-s", c.quietStart ?? 22, 'type="number" min="0" max="23"')}${f("Selesai (jam)", "q-e", c.quietEnd ?? 5, 'type="number" min="0" max="23"')}</div>
   <div class="actions" style="justify-content:flex-start"><button class="btn" data-act="saveCfg">Simpan</button></div></div></div>`; };
 const sch = () => {
@@ -71,7 +79,7 @@ function draw() {
 }
 function listen() {
   if (listening) return; listening = true;
-  for (const [k, p] of [["courses", "courses"], ["config", "config"], ["sch", "scholarships"], ["meta", "scholarMeta"]]) watch(p, v => { D[k] = v; render(true); });
+  for (const [k, p] of [["courses", "courses"], ["config", "config"], ["sch", "scholarships"], ["meta", "scholarMeta"], ["sems", "semesters"]]) watch(p, v => { D[k] = v; render(true); });
   for (const k of ["users", "items"]) watch(k, v => { D[k] = v; if (tab === "dat") render(true); });
   watch("audit", v => { D.audit = v; if (tab === "log") render(true); }, "&orderBy=%22%24key%22&limitToLast=50");
 }
@@ -97,8 +105,15 @@ document.addEventListener("click", e => {
     case "recheck": check(); break;
     case "out": Promise.race([logA("Logout admin"), new Promise(r => setTimeout(r, 1500))]).finally(() => signOut(auth)); break;
     case "tab": tab = d.t; render(); break;
-    case "saveC": { const o = { title: v("#c-t"), day: +$("#c-d").value, time: v("#c-h"), room: v("#c-r"), lecturer: v("#c-l") }; if (!o.title || !o.time) return say("Isi nama dan jam mulai.");
+    case "saveC": { const o = { title: v("#c-t"), day: +$("#c-d").value, time: v("#c-h"), room: v("#c-r"), lecturer: v("#c-l"), sem: $("#c-s")?.value || D.config.activeSemester || "" }; if (!o.title || !o.time) return say("Isi nama dan jam mulai.");
       run(edit ? Promise.all(Object.entries(o).map(([k, x]) => put(`courses/${edit}/${k}`, x))) : rq("POST", "courses", o), "Mata kuliah tersimpan.", `${edit ? "Ubah" : "Tambah"} mata kuliah: ${o.title}`, true); edit = null; break; }
+    case "semF": semF = d.id; render(); break;
+    case "addSem": { const n = v("#sem-n").slice(0, 60) || `Semester ${Object.keys(D.sems).length + 1}`, first = !Object.keys(D.sems).length;
+      run((async () => { const r = await rq("POST", "semesters", { name: n, order: Date.now() }); if (first) await Promise.all([put("config/activeSemester", r.name), ...Object.entries(D.courses).filter(([, x]) => !x.sem).map(([id]) => put(`courses/${id}/sem`, r.name))]); })(), "Semester ditambahkan.", `Tambah semester: ${n}`, true); break; }
+    case "actSem": run(put("config/activeSemester", d.id), "Semester aktif diubah.", `Aktifkan semester ${D.sems[d.id]?.name || d.id}`); break;
+    case "delSem": { if (Object.values(D.courses).some(x => x.sem === d.id)) return say("Pindahkan atau hapus dulu mata kuliah di semester ini."); if (!confirm("Hapus semester ini?")) return;
+      run(Promise.all([del(`semesters/${d.id}`), ...(D.config.activeSemester === d.id ? [del("config/activeSemester")] : [])]), "Semester dihapus.", `Hapus semester ${D.sems[d.id]?.name || d.id}`); break; }
+    case "saveSiakad": { const u = v("#siakad"); if (u && !/^https:\/\//.test(u)) return say("Alamat harus diawali https://"); run(put("config/siakadUrl", u.slice(0, 300)), "Alamat SIAKAD disimpan.", "Ubah alamat SIAKAD"); break; }
     case "editC": edit = d.id; render(); break; case "cancelC": edit = null; render(); break;
     case "delC": if (confirm("Hapus mata kuliah ini?")) run(del(`courses/${d.id}`), "Mata kuliah dihapus.", `Hapus mata kuliah: ${D.courses[d.id]?.title || d.id}`); break;
     case "post": { const t = v("#a-t"); if (t) run(put("config/announce", { id: Date.now(), text: t.slice(0, 500) }), "Pengumuman diterbitkan.", "Terbitkan pengumuman"); break; }

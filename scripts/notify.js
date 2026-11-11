@@ -4,7 +4,7 @@ admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.F
 const db = admin.database(), TG = process.env.TG_TOKEN, SITE = process.env.SITE_URL || "";
 const val = async p => (await db.ref(p).once("value")).val();
 const H = 36e5, D = 24 * H, now = Date.now(), W = new Date(now + 7 * H), ymd = W.toISOString().slice(0, 10), hm = W.getUTCHours() * 60 + W.getUTCMinutes();
-const cfg = (await val("config")) || {}, courses = Object.entries((await val("courses")) || {}).map(([id, x]) => ({ id, ...x }));
+const cfg = (await val("config")) || {}, courses = Object.entries((await val("courses")) || {}).map(([id, x]) => ({ id, ...x })).filter(x => !cfg.activeSemester || x.sem === cfg.activeSemester);
 if (hm >= (cfg.quietStart ?? 22) * 60 || hm < (cfg.quietEnd ?? 5) * 60) process.exit(0); // jam tenang (atur admin)
 const left = t => t >= D ? `${Math.round(t / D)} hari` : t >= H ? `${Math.round(t / H)} jam` : `${Math.round(t / 6e4)} menit`;
 async function send(uid, u, title, body) {

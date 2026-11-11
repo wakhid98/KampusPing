@@ -13,11 +13,12 @@ const ic = n => `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" str
 const ms = x => Date.parse(x.when + ":00+07:00");
 const fmt = x => new Date(ms(x)).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" });
 const rel = t => { const d = t - Date.now(), a = Math.abs(d), h = a / 36e5, s = h < 1 ? Math.round(a / 6e4) + " menit" : h < 24 ? Math.round(h) + " jam" : Math.round(h / 24) + " hari"; return d < 0 ? ["Lewat " + s, "bad"] : [s + " lagi", h < 24 ? "warn" : "ok"]; };
-const by = (c, t) => (t === "class" ? c.courses : c.items).filter(x => x.type === t && !x.done);
+const activeCourses = c => c.cfg.activeSemester ? c.courses.filter(x => x.sem === c.cfg.activeSemester) : c.courses;
+const by = (c, t) => (t === "class" ? activeCourses(c) : c.items).filter(x => x.type === t && !x.done);
 export const lists = items => [...new Set(["Utama", ...items.filter(x => x.type === "task").map(x => x.list || "Utama")])];
 export function shell(c) {
   const link = cl => NAV.map(([k, n]) => `<button class="${cl}${k === c.view ? " on" : ""}" data-act="nav" data-v="${k}" aria-label="${n}">${ic(k)}<span>${n}</span></button>`).join("");
-  const body = c.view === "home" ? home(c) : c.view === "set" ? settings(c) : c.view === "cal" ? cal(c) : c.view === "fokus" ? G.fokus(c) : c.view === "ipk" ? G.ipk(c) : listPage(c);
+  const body = c.view === "home" ? home(c) : c.view === "set" ? settings(c) : c.view === "cal" ? cal(c) : c.view === "class" ? schedule(c) : c.view === "fokus" ? G.fokus(c) : c.view === "ipk" ? G.ipk(c) : listPage(c);
   const add = NAME[c.view] && c.view !== "class" ? `<button class="btn" data-act="add" data-t="${c.view}">${ic("plus")}<span>Tambah</span></button>` : "";
   return `<header class="top"><div class="brand"><span class="logo">K</span>KampusPing</div><nav class="nv">${link("nl")}</nav><div class="actions"><button class="ib" data-act="theme" aria-label="Ganti tema">${ic("theme")}</button>${add}</div></header>${c.slow && !c.conn ? '<div class="banner">Belum terhubung ke database. Perubahan akan tersimpan saat tersambung. <a href="cek.html">Periksa koneksi</a></div>' : ""}
   <main class="page">${c.view === "home" ? "" : `<h1 class="ttl">${c.view === "set" ? "Pengaturan" : NAV.find(n => n[0] === c.view)[1]}</h1>`}${body}</main>
@@ -46,7 +47,7 @@ function home(c) {
 }
 function cal(c) {
   const W = new Date(Date.now() + 252e5), base = new Date(Date.UTC(W.getUTCFullYear(), W.getUTCMonth() + (c.calOff || 0), 1)), y = base.getUTCFullYear(), m = base.getUTCMonth(), p = n => String(n).padStart(2, "0");
-  const dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), today = W.toISOString().slice(0, 10), sel = c.calSel || today, ev = {}, wd = new Set(c.courses.map(x => x.day));
+  const dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), today = W.toISOString().slice(0, 10), sel = c.calSel || today, ev = {}, wd = new Set(activeCourses(c).map(x => x.day));
   c.items.filter(x => x.when && !x.done).forEach(x => (ev[x.when.slice(0, 10)] ||= []).push(x));
   const days = Array.from({ length: dim }, (_, i) => {
     const k = `${y}-${p(m + 1)}-${p(i + 1)}`, dw = (base.getUTCDay() + i) % 7, e = ev[k] || [];
@@ -54,11 +55,25 @@ function cal(c) {
     return `<button class="cd${k === today ? " today" : ""}${k === sel ? " sel" : ""}${dw === 0 ? " min" : ""}" data-act="calDay" data-d="${k}"><span>${i + 1}</span><em class="dots">${dots}</em></button>`;
   });
   const dow = new Date(sel + "T00:00:00Z").getUTCDay(), list = [...(ev[sel] || []).map(x => `<div class="item"><div class="grow"><b>${esc(x.title)}</b><small>${x.type === "scholar" ? "Beasiswa" : "Tugas"} · ${fmt(x)}</small></div></div>`),
-    ...c.courses.filter(x => x.day === dow).sort((a, b) => a.time.localeCompare(b.time)).map(x => `<div class="item"><div class="dayb">${esc(x.time)}</div><div class="grow"><b>${esc(x.title)}</b><small>Kuliah${x.room ? " · " + esc(x.room) : ""}</small></div></div>`)];
+    ...activeCourses(c).filter(x => x.day === dow).sort((a, b) => a.time.localeCompare(b.time)).map(x => `<div class="item"><div class="dayb">${esc(x.time)}</div><div class="grow"><b>${esc(x.title)}</b><small>Kuliah${x.room ? " · " + esc(x.room) : ""}</small></div></div>`)];
   return `<div class="calwrap"><div class="card calc"><div class="row2"><button class="ib" data-act="calNav" data-n="-1" aria-label="Bulan lalu">‹</button><b class="mon">${base.toLocaleDateString("id-ID", { month: "long", year: "numeric", timeZone: "UTC" })}</b><button class="ib" data-act="calNav" data-n="1" aria-label="Bulan depan">›</button></div>
   <div class="cal">${["M", "S", "S", "R", "K", "J", "S"].map(d => `<b>${d}</b>`).join("")}${Array(base.getUTCDay()).fill("<span></span>").join("")}${days.join("")}</div>
   <div class="row2"><button class="chip" data-act="calToday">Hari ini</button><small class="muted leg"><i class="dotk"></i>kuliah <i class="dott"></i>tugas <i class="dotb"></i>beasiswa</small></div></div>
   <div><h3 class="muted" style="margin:0 0 10px;font-weight:600">${DAYS[dow]}, ${sel.split("-").reverse().join("/")}</h3>${list.join("") || '<div class="empty">Tidak ada agenda di hari ini.</div>'}</div></div>`;
+}
+const hue = s => [...String(s)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 360, 7);
+function schedule(c) {
+  const sems = [...c.sems].sort((a, b) => a.order - b.order), sel = c.semSel || c.cfg.activeSemester || "", td = new Date(Date.now() + 252e5).getUTCDay();
+  const list = c.courses.filter(x => !sems.length || !sel || x.sem === sel), order = [1, 2, 3, 4, 5, 6, 0].filter(d => d !== 0 || list.some(x => x.day === 0));
+  const dsel = order.includes(c.schDay ?? td) ? (c.schDay ?? td) : order[0];
+  const url = /^https:\/\//.test(c.cfg.siakadUrl || "") ? c.cfg.siakadUrl : "https://siakad.polinema.ac.id/beranda";
+  const chips = sems.length > 1 ? `<div class="tools">${sems.map(s => `<button class="chip${s.id === sel ? " on" : ""}" data-act="semSel" data-s="${esc(s.id)}">${esc(s.name)}${s.id === c.cfg.activeSemester ? " · aktif" : ""}</button>`).join("")}</div>` : sems.length ? `<p class="muted" style="margin-bottom:10px">${esc(sems[0].name)}</p>` : "";
+  const col = d => {
+    const cs = list.filter(x => x.day === d).sort((a, b) => a.time.localeCompare(b.time));
+    return `<section class="col${d === td ? " today" : ""}" data-d="${d}"><h3>${DAYS[d]}${d === td ? " · hari ini" : ""}</h3>${cs.map(x => `<article class="cls" style="--h:${hue(x.title)}"><div class="ct">${esc(x.time)}</div><div class="cb"><b>${esc(x.title)}</b><small>${[x.room, x.lecturer].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</small>${attBlock(c, x)}</div></article>`).join("") || '<p class="muted none">Tidak ada kuliah</p>'}</section>`;
+  };
+  return `${chips}${list.length ? `<div class="dtabs">${order.map(d => `<button class="chip${d === dsel ? " on" : ""}${d === td ? " tdy" : ""}" data-act="schDay" data-d="${d}">${DAYS[d].slice(0, 3)}</button>`).join("")}</div><div class="wk" data-sel="${dsel}">${order.map(col).join("")}</div>` : '<div class="empty"><p>Belum ada jadwal kuliah. Jadwal diisi oleh admin.</p></div>'}
+  <div class="card siakad"><div class="grow"><b>Presensi resmi kampus</b><p class="muted">Presensi yang sah dicatat di SIAKAD. Catatan di KampusPing hanya untuk pantauanmu sendiri.</p></div><a class="btn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Buka SIAKAD</a></div>`;
 }
 function listPage(c) {
   const t = c.view, chip = ([k, n]) => `<button class="chip${c.flt === k ? " on" : ""}" data-act="flt" data-f="${k}">${n}</button>`;

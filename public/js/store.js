@@ -42,6 +42,7 @@ export const watchCourses = cb => watch("courses", rows({ type: "class" }))(cb);
 export const watchCfg = cb => watch("config", v => v || {})(cb);
 export const watchScholars = cb => watch("scholarships", rows())(cb);
 export const watchScholarMeta = cb => watch("scholarMeta", v => v || {})(cb);
+export const watchSemesters = cb => watch("semesters", rows())(cb);
 export const watchMe = (u, cb) => watch(`users/${u}`, v => v || {})(cb);
 export const watchConn = cb => { connCb = cb; if (up !== null) cb(up); return () => { connCb = () => {}; }; };
 const op = async (m, p, body) => { try { const v = await rq(m, p, body); kick(); return v; } catch (e) { dbErr(e); throw e; } };
