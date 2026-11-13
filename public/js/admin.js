@@ -39,7 +39,7 @@ function mk() {
   return `${semCard}<div class="card stack" style="margin-top:14px"><h3>${edit ? "Ubah" : "Tambah"} mata kuliah</h3><div class="fgrid">${f("Mata kuliah", "c-t", e.title, 'maxlength="100"')}
   <label>Semester<select id="c-s">${S.map(([id, s]) => `<option value="${esc(id)}"${id === defS ? " selected" : ""}>${esc(s.name)}</option>`).join("") || '<option value="">(belum ada)</option>'}</select></label>
   <label>Hari<select id="c-d">${DAYS.map((d, i) => `<option value="${i}"${i === (e.day ?? 1) ? " selected" : ""}>${d}</option>`).join("")}</select></label>
-  ${f("Jam mulai", "c-h", e.time, 'type="time"')}${f("Ruang", "c-r", e.room, 'maxlength="60"')}${f("Dosen", "c-l", e.lecturer, 'maxlength="80"')}</div>
+  ${f("Jam mulai", "c-h", e.time, 'type="time"')}${f("Jam selesai (opsional)", "c-e", e.end, 'type="time"')}${f("Ruang", "c-r", e.room, 'maxlength="60"')}${f("Dosen", "c-l", e.lecturer, 'maxlength="80"')}</div>
   <div class="actions" style="justify-content:flex-start"><button class="btn" data-act="saveC">Simpan</button>${edit ? '<button class="btn ghost" data-act="cancelC">Batal</button>' : ""}</div></div>
   <div style="margin-top:14px">${chips}${rows.map(([id, x]) => `<div class="item"><div class="dayb">${DAYS[x.day].slice(0, 3)}</div><div class="grow"><b>${esc(x.title)}</b><small>${esc(x.time)}${x.room ? " · " + esc(x.room) : ""}${x.lecturer ? " · " + esc(x.lecturer) : ""}${x.sem && D.sems[x.sem] ? " · " + esc(D.sems[x.sem].name) : ""}</small></div>
   <button class="btn ghost" data-act="editC" data-id="${esc(id)}">Ubah</button><button class="btn danger" data-act="delC" data-id="${esc(id)}">Hapus</button></div>`).join("") || '<div class="empty">Belum ada mata kuliah.</div>'}</div>`;
@@ -105,7 +105,7 @@ document.addEventListener("click", e => {
     case "recheck": check(); break;
     case "out": Promise.race([logA("Logout admin"), new Promise(r => setTimeout(r, 1500))]).finally(() => signOut(auth)); break;
     case "tab": tab = d.t; render(); break;
-    case "saveC": { const o = { title: v("#c-t"), day: +$("#c-d").value, time: v("#c-h"), room: v("#c-r"), lecturer: v("#c-l"), sem: $("#c-s")?.value || D.config.activeSemester || "" }; if (!o.title || !o.time) return say("Isi nama dan jam mulai.");
+    case "saveC": { const o = { title: v("#c-t"), day: +$("#c-d").value, time: v("#c-h"), end: v("#c-e"), room: v("#c-r"), lecturer: v("#c-l"), sem: $("#c-s")?.value || D.config.activeSemester || "" }; if (!o.title || !o.time) return say("Isi nama dan jam mulai.");
       run(edit ? Promise.all(Object.entries(o).map(([k, x]) => put(`courses/${edit}/${k}`, x))) : rq("POST", "courses", o), "Mata kuliah tersimpan.", `${edit ? "Ubah" : "Tambah"} mata kuliah: ${o.title}`, true); edit = null; break; }
     case "semF": semF = d.id; render(); break;
     case "addSem": { const n = v("#sem-n").slice(0, 60) || `Semester ${Object.keys(D.sems).length + 1}`, first = !Object.keys(D.sems).length;

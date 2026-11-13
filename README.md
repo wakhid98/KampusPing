@@ -36,3 +36,9 @@ Web ini sudah siap dipasang sebagai aplikasi (ikon, manifest, service worker, ha
 - Admin: Dasbor Admin, tab Mata kuliah, bagian **Semester**. Semester pertama otomatis aktif dan mengambil mata kuliah yang sudah ada. Tombol **Tambah semester berikutnya** membuat semester baru; ganti yang aktif dengan **Jadikan aktif**. Hanya jadwal semester aktif yang dipakai di beranda, kalender, dan notifikasi.
 - Mahasiswa: tab Nilai kini per semester (IPS tiap semester + IPK kumulatif) dengan tombol **+ Semester berikutnya**.
 - Tombol **Buka SIAKAD** di halaman Jadwal membuka SIAKAD di tab baru. SIAKAD butuh login dan tidak bisa ditanam di dalam web ini.
+
+## Notifikasi di aplikasi Android (APK)
+1. Di PWABuilder (Android options) pastikan **Notification delegation / Enable notifications** aktif, dan isi `public/.well-known/assetlinks.json` dari zip lalu deploy (tanpa ini aplikasi hanya jadi tab Chrome).
+2. Setelah APK dipasang: buka aplikasi, Pengaturan, **Aktifkan notifikasi**, pilih Izinkan. Tekan **Kirim notifikasi uji** untuk memastikan tampil.
+3. Android: Pengaturan HP, Aplikasi, KampusPing, Notifikasi harus aktif; hemat baterai jangan membatasi aplikasi. Pada Android 13 ke atas izin notifikasi muncul sebagai kotak dialog.
+4. Telegram tetap menjadi cadangan bila notifikasi aplikasi terlambat.

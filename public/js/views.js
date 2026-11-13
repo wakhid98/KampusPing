@@ -21,7 +21,7 @@ export function shell(c) {
   const body = c.view === "home" ? home(c) : c.view === "set" ? settings(c) : c.view === "cal" ? cal(c) : c.view === "class" ? schedule(c) : c.view === "fokus" ? G.fokus(c) : c.view === "ipk" ? G.ipk(c) : listPage(c);
   const add = NAME[c.view] && c.view !== "class" ? `<button class="btn" data-act="add" data-t="${c.view}">${ic("plus")}<span>Tambah</span></button>` : "";
   return `<header class="top"><div class="brand"><span class="logo">K</span>KampusPing</div><nav class="nv">${link("nl")}</nav><div class="actions"><button class="ib" data-act="theme" aria-label="Ganti tema">${ic("theme")}</button>${add}</div></header>${c.slow && !c.conn ? '<div class="banner">Belum terhubung ke database. Perubahan akan tersimpan saat tersambung. <a href="cek.html">Periksa koneksi</a></div>' : ""}
-  <main class="page">${c.view === "home" ? "" : `<h1 class="ttl">${c.view === "set" ? "Pengaturan" : NAV.find(n => n[0] === c.view)[1]}</h1>`}${body}</main>
+  <main class="page${c.view === "class" ? " wide" : ""}">${c.view === "home" ? "" : `<h1 class="ttl">${c.view === "set" ? "Pengaturan" : NAV.find(n => n[0] === c.view)[1]}</h1>`}${body}</main>
   <footer class="foot"><span>© 2026 KampusPing · Pengingat kuliah gratis</span><a href="admin.html">Dasbor admin</a></footer><nav class="tabs">${link("tb")}</nav>`;
 }
 function home(c) {
@@ -34,7 +34,7 @@ function home(c) {
   const ds = new Date(now).toLocaleDateString("id-ID", { weekday: "long", day: "numeric", month: "long", timeZone: "Asia/Jakarta" });
   const all = Object.values(c.me.attend || {}).flatMap(o => Object.values(o)), pct = all.length ? Math.round(all.filter(v => v === "h").length / all.length * 100) + "%" : "-";
   const st = (n, l) => `<div class="st"><b>${n}</b><span>${l}</span></div>`;
-  return `<section class="hero"><p>${ds}</p><h1>${hi}, ${esc(c.user.displayName?.split(" ")[0] || "kamu")}.<br>Kuliah jadi lebih mudah dalam satu genggaman.</h1>
+  return `${c.perm === "default" && c.isApp ? '<div class="card notice"><div class="grow"><b>Aktifkan notifikasi</b><p class="muted">Agar pengingat jadwal dan tugas masuk ke HP-mu.</p></div><button class="btn" data-act="push">Aktifkan</button></div>' : ""}<section class="hero"><p>${ds}</p><h1>${hi}, ${esc(c.user.displayName?.split(" ")[0] || "kamu")}.<br>Kuliah jadi lebih mudah dalam satu genggaman.</h1>
   <p class="lead">Hari ini ada ${cls.length} kelas dan ${due.length} tugas yang perlu perhatianmu.</p><div class="actions" style="justify-content:flex-start"><button class="btn light" data-act="add" data-t="task">+ Tambah tugas</button><button class="btn ghostw" data-act="nav" data-v="cal">Lihat kalender</button></div></section>
   <section class="stats">${st(tasks.length, "tugas aktif")}${st(cls.length, "kelas hari ini")}${st(pct, "kehadiran")}${st(c.me.streak || 0, "streak hari")}</section>
   <form class="qa" id="qa"><input id="qa-t" maxlength="120" placeholder="Tambah tugas cepat: Laporan fisika besok 23.59" aria-label="Tambah tugas cepat" autocomplete="off"><button class="btn">Tambah</button></form>
@@ -62,24 +62,45 @@ function cal(c) {
   <div><h3 class="muted" style="margin:0 0 10px;font-weight:600">${DAYS[dow]}, ${sel.split("-").reverse().join("/")}</h3>${list.join("") || '<div class="empty">Tidak ada agenda di hari ini.</div>'}</div></div>`;
 }
 const hue = s => [...String(s)].reduce((a, ch) => (a * 31 + ch.charCodeAt(0)) % 360, 7);
+const mins = t => { const [h, m] = String(t).split(":").map(Number); return h * 60 + (m || 0); };
+const hhmm = n => `${String(Math.floor(n / 60) % 24).padStart(2, "0")}:${String(n % 60).padStart(2, "0")}`;
+const endOf = x => { const a = mins(x.time), b = x.end ? mins(x.end) : 0; return b > a ? b : a + 100; };
+const range = x => `${x.time}${x.end && mins(x.end) > mins(x.time) ? " – " + x.end : ""}`;
+function lanes(cs) { // kelas yang waktunya bertumpuk dibagi ke jalur berdampingan
+  const out = []; let cluster = [], cEnd = 0;
+  const flush = () => { const k = Math.max(1, ...cluster.map(o => o.l + 1)); cluster.forEach(o => { o.k = k; }); out.push(...cluster); cluster = []; };
+  for (const x of cs) {
+    const st = mins(x.time); if (cluster.length && st >= cEnd) flush();
+    const used = cluster.filter(o => endOf(o.x) > st).map(o => o.l); let l = 0; while (used.includes(l)) l++;
+    cluster.push({ x, l }); cEnd = Math.max(cEnd, endOf(x));
+  }
+  if (cluster.length) flush(); return out;
+}
 function schedule(c) {
-  const sems = [...c.sems].sort((a, b) => a.order - b.order), sel = c.semSel || c.cfg.activeSemester || "", td = new Date(Date.now() + 252e5).getUTCDay();
+  const sems = [...c.sems].sort((a, b) => a.order - b.order), sel = c.semSel || c.cfg.activeSemester || "", W = new Date(Date.now() + 252e5), td = W.getUTCDay(), nowM = W.getUTCHours() * 60 + W.getUTCMinutes();
   const list = c.courses.filter(x => !sems.length || !sel || x.sem === sel), order = [1, 2, 3, 4, 5, 6, 0].filter(d => d !== 0 || list.some(x => x.day === 0));
-  const dsel = order.includes(c.schDay ?? td) ? (c.schDay ?? td) : order[0];
+  const dsel = order.includes(c.schDay ?? td) ? (c.schDay ?? td) : order[0], byTime = (a, b) => a.time.localeCompare(b.time);
   const url = /^https:\/\//.test(c.cfg.siakadUrl || "") ? c.cfg.siakadUrl : "https://siakad.polinema.ac.id/beranda";
   const chips = sems.length > 1 ? `<div class="tools">${sems.map(s => `<button class="chip${s.id === sel ? " on" : ""}" data-act="semSel" data-s="${esc(s.id)}">${esc(s.name)}${s.id === c.cfg.activeSemester ? " · aktif" : ""}</button>`).join("")}</div>` : sems.length ? `<p class="muted" style="margin-bottom:10px">${esc(sems[0].name)}</p>` : "";
-  const col = d => {
-    const cs = list.filter(x => x.day === d).sort((a, b) => a.time.localeCompare(b.time));
-    return `<section class="col${d === td ? " today" : ""}" data-d="${d}"><h3>${DAYS[d]}${d === td ? " · hari ini" : ""}</h3>${cs.map(x => `<article class="cls" style="--h:${hue(x.title)}"><div class="ct">${esc(x.time)}</div><div class="cb"><b>${esc(x.title)}</b><small>${[x.room, x.lecturer].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</small>${attBlock(c, x)}</div></article>`).join("") || '<p class="muted none">Tidak ada kuliah</p>'}</section>`;
-  };
-  return `${chips}${list.length ? `<div class="dtabs">${order.map(d => `<button class="chip${d === dsel ? " on" : ""}${d === td ? " tdy" : ""}" data-act="schDay" data-d="${d}">${DAYS[d].slice(0, 3)}</button>`).join("")}</div><div class="wk" data-sel="${dsel}">${order.map(col).join("")}</div>` : '<div class="empty"><p>Belum ada jadwal kuliah. Jadwal diisi oleh admin.</p></div>'}
-  <div class="card siakad"><div class="grow"><b>Presensi resmi kampus</b><p class="muted">Presensi yang sah dicatat di SIAKAD. Catatan di KampusPing hanya untuk pantauanmu sendiri.</p></div><a class="btn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Buka SIAKAD</a></div>`;
+  const isActive = !sems.length || !c.cfg.activeSemester || sel === c.cfg.activeSemester, tcs = isActive ? list.filter(x => x.day === td).sort(byTime) : [], nextI = tcs.findIndex(x => mins(x.time) > nowM);
+  const pres = tcs.length ? `<div class="card pres"><div class="sc-h"><h3 style="margin:0">Presensi hari ini · ${DAYS[td]}</h3><small class="muted">Catatan pribadi, bukan presensi resmi</small></div>${tcs.map((x, i) => `<div class="pr"><div class="prt">${esc(range(x))}</div><div class="grow"><b>${esc(x.title)}</b><small>${[x.room, x.lecturer].filter(Boolean).map(esc).join(" · ")}</small></div>${nowM >= mins(x.time) && nowM < endOf(x) ? '<span class="badge ok">Berlangsung</span>' : i === nextI ? '<span class="badge acc">Berikutnya</span>' : ""}${attChips(c, x)}</div>`).join("")}</div>` : "";
+  let body = '<div class="empty"><p>Belum ada jadwal kuliah. Jadwal diisi oleh admin.</p></div>';
+  if (list.length) {
+    const s0 = Math.floor(Math.min(...list.map(x => mins(x.time))) / 60) * 60, e0 = Math.ceil(Math.max(...list.map(endOf)) / 60) * 60, mon = new Date(Date.UTC(W.getUTCFullYear(), W.getUTCMonth(), W.getUTCDate() - ((td + 6) % 7)));
+    const dl = d => new Date(mon.getTime() + ((d + 6) % 7) * 864e5).toLocaleDateString("id-ID", { day: "numeric", month: "short", timeZone: "UTC" });
+    const hours = Array.from({ length: (e0 - s0) / 60 + 1 }, (_, i) => `<span style="top:calc(${i * 60}*var(--px))">${hhmm(s0 + i * 60)}</span>`).join("");
+    const tt = `<div class="tt" style="--n:${order.length};--tot:${e0 - s0}"><div class="tt-h"></div>${order.map(d => `<div class="tt-h${d === td ? " today" : ""}">${DAYS[d]}<small>${dl(d)}</small></div>`).join("")}<div class="tt-t">${hours}</div>
+    ${order.map(d => `<div class="tt-c${d === td ? " today" : ""}">${lanes(list.filter(x => x.day === d).sort(byTime)).map(({ x, l, k }) => `<article class="tc${k > 1 ? " half" : ""}" style="--h:${hue(x.title)};--s:${mins(x.time) - s0};--d:${endOf(x) - mins(x.time)};--l:${l};--k:${k}"><span class="tm2">${esc(range(x))}</span><b>${esc(x.title)}</b>${x.room ? `<small>${esc(x.room)}</small>` : ""}${x.lecturer ? `<small>${esc(x.lecturer)}</small>` : ""}</article>`).join("")}${d === td && isActive && nowM >= s0 && nowM <= e0 ? `<i class="now" style="top:calc(${nowM - s0}*var(--px))"></i>` : ""}</div>`).join("")}</div>`;
+    const col = d => `<section class="col${d === td ? " today" : ""}" data-d="${d}"><h3>${DAYS[d]}${d === td ? " · hari ini" : ""}<small>${dl(d)}</small></h3>${list.filter(x => x.day === d).sort(byTime).map(x => `<article class="cls" style="--h:${hue(x.title)}"><div class="ct">${esc(range(x))}</div><b>${esc(x.title)}</b><small>${[x.room, x.lecturer].filter(Boolean).map(esc).join(" · ") || "&nbsp;"}</small>${pctOf(c, x) === null ? "" : `<span class="badge ${pctOf(c, x) < 75 ? "bad" : "ok"}">Kehadiran ${pctOf(c, x)}%</span>`}</article>`).join("") || '<p class="muted none">Tidak ada kuliah</p>'}</section>`;
+    body = `<div class="dtabs">${order.map(d => `<button class="chip${d === dsel ? " on" : ""}${d === td ? " tdy" : ""}" data-act="schDay" data-d="${d}">${DAYS[d].slice(0, 3)}</button>`).join("")}</div><div class="wk" data-sel="${dsel}">${order.map(col).join("")}</div>${tt}`;
+  }
+  return `${chips}${pres}${body}<div class="card siakad"><div class="grow"><b>Presensi resmi kampus</b><p class="muted">Presensi yang sah dicatat di SIAKAD. Catatan di KampusPing hanya untuk pantauanmu sendiri.</p></div><a class="btn" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Buka SIAKAD</a></div>`;
 }
 function listPage(c) {
   const t = c.view, chip = ([k, n]) => `<button class="chip${c.flt === k ? " on" : ""}" data-act="flt" data-f="${k}">${n}</button>`;
-  const fc = t === "class" ? "" : [["active", "Aktif"], ["done", "Selesai"], ["all", "Semua"]].map(chip).join("");
+  const fc = [["active", "Aktif"], ["done", "Selesai"], ["all", "Semua"]].map(chip).join("");
   const ls = t !== "task" ? "" : [["*all", "Semua daftar"], ["*star", "★ Berbintang"], ...lists(c.items).map(l => [l, esc(l)])].map(([l, n]) => `<button class="chip${c.lst === l ? " on" : ""}" data-act="lst" data-l="${esc(l)}">${n}</button>`).join("");
-  const clr = t !== "class" && c.items.some(x => x.type === t && x.done) ? '<button class="btn ghost" data-act="clearDone">Hapus yang selesai</button>' : "";
+  const clr = c.items.some(x => x.type === t && x.done) ? '<button class="btn ghost" data-act="clearDone">Hapus yang selesai</button>' : "";
   return `${t === "scholar" ? scholarCard(c) : ""}<div class="tools"><input class="search" id="q" type="search" placeholder="Cari..." value="${esc(c.q)}" aria-label="Cari">${fc}</div>${ls || clr ? `<div class="tools">${ls}${clr}</div>` : ""}<div id="rows">${rows(c)}</div>`;
 }
 function scholarCard(c) {
@@ -89,15 +110,16 @@ function scholarCard(c) {
   const row = s => {
     const r = s.d ? rel(Date.parse(s.d + "T23:59:00+07:00")) : null, url = /^https?:\/\//.test(s.u) ? s.u : "";
     const tutup = s.d ? "Tutup " + new Date(s.d + "T12:00:00Z").toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) + (s.ap ? " (perkiraan)" : "") : "Tanggal belum terdeteksi, cek situs resmi";
-    return `<div class="item"><div class="grow"><b>${esc(s.t)}</b><small>${esc(s.s || "")} · ${tutup}</small></div>${r ? `<span class="badge ${r[1]}">${r[0]}</span>` : ""}${url ? `<a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Buka</a>` : ""}${s.d ? (have.has(s.t.toLowerCase().slice(0, 120)) ? '<span class="badge ok">Dipantau</span>' : `<button class="btn" data-act="track" data-id="${esc(s.id)}">Pantau</button>`) : ""}</div>`;
+    return `<div class="sc"><div class="sc-m"><b>${esc(s.t)}</b><small>${esc(s.s || "")} · ${tutup}${r ? ` <span class="badge ${r[1]}">${r[0]}</span>` : ""}</small></div>
+    <div class="sc-a">${url ? `<a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener noreferrer">Buka</a>` : ""}${s.d ? (have.has(s.t.toLowerCase().slice(0, 120)) ? '<span class="badge ok">Dipantau</span>' : `<button class="btn" data-act="track" data-id="${esc(s.id)}">Pantau</button>`) : ""}</div></div>`;
   };
-  return `<div class="card stack" style="margin-bottom:16px"><div class="row2"><h3 style="margin:0">Beasiswa aktif, dicarikan otomatis</h3><small class="muted">${up ? "Diperbarui " + up : "Belum ada pembaruan"}</small></div>${L.map(row).join("") || '<p class="muted">Belum ada hasil. Pencarian berjalan otomatis tiap pagi dan setiap kali web diperbarui.</p>'}<small class="muted">Diambil otomatis dari berita dan sumber terbuka. Selalu cek situs resmi sebelum mendaftar.</small></div>`;
+  return `<div class="card" style="margin-bottom:16px"><div class="sc-h"><h3 style="margin:0">Beasiswa aktif, dicarikan otomatis</h3><small class="muted">${up ? "Diperbarui " + up : "Belum ada pembaruan"}</small></div>${L.map(row).join("") || '<p class="muted">Belum ada hasil. Pencarian berjalan otomatis tiap pagi dan setiap kali web diperbarui.</p>'}<small class="muted" style="display:block;margin-top:10px">Diambil otomatis dari berita dan sumber terbuka. Selalu cek situs resmi sebelum mendaftar.</small></div>`;
 }
-function attBlock(c, x) {
-  const W = new Date(Date.now() + 252e5), td = W.toISOString().slice(0, 10), rec = (c.me.attend || {})[x.id] || {}, v = Object.values(rec), pct = v.length ? Math.round(v.filter(s => s === "h").length / v.length * 100) : null;
-  const btn = x.day === W.getUTCDay() ? ["h", "i", "s", "a"].map(k => `<button class="chip${rec[td] === k ? " on" : ""}" data-act="att" data-id="${x.id}" data-s="${k}">${{ h: "Hadir", i: "Izin", s: "Sakit", a: "Alpa" }[k]}</button>`).join("") : "";
-  return !btn && pct === null ? "" : `<div class="att">${btn}${pct === null ? "" : `<span class="badge ${pct < 75 ? "bad" : "ok"}">Kehadiran ${pct}% (${v.length} pertemuan)</span>`}</div>`;
+function attChips(c, x) {
+  const td = new Date(Date.now() + 252e5).toISOString().slice(0, 10), rec = (c.me.attend || {})[x.id] || {}, v = Object.values(rec), pct = v.length ? Math.round(v.filter(s => s === "h").length / v.length * 100) : null;
+  return `<div class="prc">${["h", "i", "s", "a"].map(k => `<button class="chip${rec[td] === k ? " on" : ""}" data-act="att" data-id="${x.id}" data-s="${k}">${{ h: "Hadir", i: "Izin", s: "Sakit", a: "Alpa" }[k]}</button>`).join("")}${pct === null ? "" : `<span class="badge ${pct < 75 ? "bad" : "ok"}">${pct}% (${v.length}x)</span>`}</div>`;
 }
+const pctOf = (c, x) => { const v = Object.values((c.me.attend || {})[x.id] || {}); return v.length ? Math.round(v.filter(s => s === "h").length / v.length * 100) : null; };
 function rekap(c) {
   const wk = Date.now() - 6048e5, done = c.items.filter(x => x.done && x.doneAt > wk).length, f = c.me.focus || {}, k = n => new Date(Date.now() + 252e5 - n * 864e5).toISOString().slice(0, 10);
   let fs = 0; for (let i = 0; i < 7; i++) fs += f[k(i)] || 0;
@@ -107,20 +129,20 @@ function rekap(c) {
 const subKeys = o => Object.entries(o || {}).sort((a, b) => parseInt(a[0].slice(1)) - parseInt(b[0].slice(1)));
 export function rows(c) {
   const t = c.view, q = c.q.toLowerCase();
-  let a = (t === "class" ? c.courses : c.items).filter(x => x.type === t && (t === "class" || c.flt === "all" || (c.flt === "done") === !!x.done));
+  let a = c.items.filter(x => x.type === t && (c.flt === "all" || (c.flt === "done") === !!x.done));
   if (t === "task" && c.lst === "*star") a = a.filter(x => x.star); else if (t === "task" && c.lst && c.lst !== "*all") a = a.filter(x => (x.list || "Utama") === c.lst);
-  a = a.filter(x => (x.title + (x.course || "") + (x.room || "") + (x.note || "")).toLowerCase().includes(q));
-  a.sort((x, y) => t === "class" ? x.day - y.day || x.time.localeCompare(y.time) : (y.star ? 1 : 0) - (x.star ? 1 : 0) || ms(x) - ms(y));
-  if (!a.length) return `<div class="empty"><p>${c.q ? "Tidak ada hasil." : "Belum ada " + NAME[t].toLowerCase() + "."}</p>${c.q || t === "class" ? "" : `<button class="btn" data-act="add" data-t="${t}">${ic("plus")}Tambah ${NAME[t].toLowerCase()}</button>`}</div>`;
+  a = a.filter(x => (x.title + (x.course || "") + (x.note || "")).toLowerCase().includes(q));
+  a.sort((x, y) => (y.star ? 1 : 0) - (x.star ? 1 : 0) || ms(x) - ms(y));
+  if (!a.length) return `<div class="empty"><p>${c.q ? "Tidak ada hasil." : "Belum ada " + NAME[t].toLowerCase() + "."}</p>${c.q ? "" : `<button class="btn" data-act="add" data-t="${t}">${ic("plus")}Tambah ${NAME[t].toLowerCase()}</button>`}</div>`;
   return a.map(x => {
-    const r = t !== "class" && !x.done ? rel(ms(x)) : null, W = ["", "Ringan", "Sedang", "Berat"][x.weight] || "", rp = { daily: "Harian", weekly: "Mingguan", monthly: "Bulanan" }[x.repeat];
-    const meta = t === "class" ? `${esc(x.time)}${x.room ? " · " + esc(x.room) : ""}${x.lecturer ? " · " + esc(x.lecturer) : ""}` : `${x.course ? esc(x.course) + " · " : ""}${fmt(x)}${x.list && x.list !== "Utama" ? " · " + esc(x.list) : ""}`;
+    const r = !x.done ? rel(ms(x)) : null, W = ["", "Ringan", "Sedang", "Berat"][x.weight] || "", rp = { daily: "Harian", weekly: "Mingguan", monthly: "Bulanan" }[x.repeat];
+    const meta = `${x.course ? esc(x.course) + " · " : ""}${fmt(x)}${x.list && x.list !== "Utama" ? " · " + esc(x.list) : ""}`;
     const sb = x.subs ? `<div class="subs">${subKeys(x.subs).map(([k, s]) => `<button class="sub${s.d ? " d" : ""}" data-act="sub" data-id="${x.id}" data-k="${esc(k)}">${s.d ? "☑" : "☐"} ${esc(s.t)}</button>`).join("")}</div>` : "";
-    return `<div class="item${x.done ? " is-done" : ""}">${t !== "class" ? `<button class="ck" data-act="done" data-id="${x.id}" data-to="${!x.done}" aria-label="${x.done ? "Batalkan selesai" : "Tandai selesai"}">${x.done ? ic("check") : ""}</button>` : `<div class="dayb">${DAYS[x.day].slice(0, 3)}</div>`}
-    <div class="grow"><b>${esc(x.title)}</b><small>${meta}</small></div>${t === "task" ? `<button class="ib star${x.star ? " on" : ""}" data-act="star" data-id="${x.id}" aria-label="Bintang">${x.star ? "★" : "☆"}</button>` : ""}
-    ${rp ? `<span class="badge">↻ ${rp}</span>` : ""}${W && !x.done ? `<span class="badge">${W}</span>` : ""}${r ? `<span class="badge ${r[1]}">${r[0]}</span>` : ""}
-    ${x.link && /^https:\/\//.test(x.link) ? `<a class="ib" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer" aria-label="Buka tautan">↗</a>` : ""}${t !== "class" ? `<button class="ib" data-act="edit" data-id="${x.id}" aria-label="Ubah">${ic("edit")}</button><button class="ib" data-act="del" data-id="${x.id}" aria-label="Hapus">${ic("trash")}</button>` : ""}
-    ${t === "class" ? attBlock(c, x) : ""}${x.note ? `<p class="note">${esc(x.note)}</p>` : ""}${sb}</div>`;
+    return `<div class="item${x.done ? " is-done" : ""}"><button class="ck" data-act="done" data-id="${x.id}" data-to="${!x.done}" aria-label="${x.done ? "Batalkan selesai" : "Tandai selesai"}">${x.done ? ic("check") : ""}</button>
+    <div class="grow"><b>${esc(x.title)}</b><small>${meta}</small></div>
+    <div class="acts">${r ? `<span class="badge ${r[1]}">${r[0]}</span>` : ""}${W && !x.done ? `<span class="badge">${W}</span>` : ""}${rp ? `<span class="badge">↻ ${rp}</span>` : ""}${t === "task" ? `<button class="ib star${x.star ? " on" : ""}" data-act="star" data-id="${x.id}" aria-label="Bintang">${x.star ? "★" : "☆"}</button>` : ""}
+    ${x.link && /^https:\/\//.test(x.link) ? `<a class="ib" href="${esc(x.link)}" target="_blank" rel="noopener noreferrer" aria-label="Buka tautan">↗</a>` : ""}<button class="ib" data-act="edit" data-id="${x.id}" aria-label="Ubah">${ic("edit")}</button><button class="ib" data-act="del" data-id="${x.id}" aria-label="Hapus">${ic("trash")}</button></div>
+    ${x.note ? `<p class="note">${esc(x.note)}</p>` : ""}${sb}</div>`;
   }).join("");
 }
 const f = (l, n, v, a = "") => `<label>${l}<input name="${n}" value="${esc(v ?? "")}" ${a} maxlength="120"></label>`;
@@ -136,8 +158,11 @@ export function form(t, x, id, ls = []) {
 }
 function settings(c) {
   const p = c.me.prefs || {}, on = k => p[k] !== false ? "checked" : "", sw = (k, l) => `<label class="sw"><input type="checkbox" data-pref="${k}" ${on(k)}>${l}</label>`;
-  return `<div class="stack"><div class="card stack"><h3>Kanal notifikasi</h3><label>Telegram Chat ID (opsional)<input id="chat" value="${esc(c.me.tgChatId || "")}" placeholder="mis. 123456789" maxlength="20"></label>
-  <div class="actions" style="justify-content:flex-start"><button class="btn" data-act="saveChat">Simpan Chat ID</button><button class="btn ghost" data-act="push">Aktifkan notifikasi web</button></div></div>
+  const pm = { granted: "Diizinkan", denied: "Diblokir", default: "Belum diizinkan", unsupported: "Tidak didukung" }[c.perm] || "Belum diizinkan";
+  return `<div class="stack"><div class="card stack"><h3>Notifikasi di perangkat ini</h3><div class="row2"><span>Izin notifikasi</span><span class="badge ${c.perm === "granted" ? "ok" : c.perm === "denied" ? "bad" : ""}">${pm}</span></div>
+  <div class="actions" style="justify-content:flex-start">${c.perm === "granted" ? '<button class="btn ghost" data-act="pushTest">Kirim notifikasi uji</button>' : c.perm === "denied" ? "" : '<button class="btn" data-act="push">Aktifkan notifikasi</button>'}</div>
+  <p class="muted" style="font-size:13px">${c.perm === "denied" ? "Notifikasi diblokir. Buka Pengaturan HP, Aplikasi, KampusPing, Notifikasi, lalu izinkan." : "Di aplikasi Android: pastikan Notifikasi KampusPing aktif di Pengaturan HP dan penghemat baterai tidak membatasi aplikasi. Telegram (di bawah) tetap menjadi cadangan."}</p></div><div class="card stack"><h3>Kanal Telegram</h3><label>Telegram Chat ID (opsional)<input id="chat" value="${esc(c.me.tgChatId || "")}" placeholder="mis. 123456789" maxlength="20"></label>
+  <div class="actions" style="justify-content:flex-start"><button class="btn" data-act="saveChat">Simpan Chat ID</button></div></div>
   <div class="card stack"><h3>Jenis pengingat</h3>${sw("task", "Tugas (H-7, H-3, H-1, 3 jam)")}${sw("class", "Kuliah (30 menit sebelum)")}${sw("scholar", "Beasiswa (H-14 sampai H-1)")}${sw("report", "Ringkasan pagi dan laporan malam")}</div>
   <div class="card stack"><h3>Cadangan data</h3><p class="muted">Simpan salinan datamu, atau pulihkan di perangkat baru.</p><div class="actions" style="justify-content:flex-start"><button class="btn ghost" data-act="export">Ekspor</button><label class="btn ghost" style="cursor:pointer">Impor<input type="file" accept="application/json" data-import="1" hidden></label></div></div>
   ${c.canInstall ? '<div class="card stack"><h3>Pasang di HP</h3><p class="muted">Pasang KampusPing seperti aplikasi, tanpa Play Store.</p><button class="btn" data-act="install">Pasang aplikasi</button></div>' : ""}<div class="card stack"><h3>Kode sinkron</h3><p class="muted">Tanpa login, datamu terikat ke kode ini. Masukkan kode yang sama di perangkat lain untuk memakai data yang sama. Jangan dibagikan: siapa pun yang punya kode bisa melihat dan mengubah datamu.</p><label>Kode perangkat ini<input id="key" readonly value="${esc(c.user.uid)}"></label><div class="actions" style="justify-content:flex-start"><button class="btn ghost" data-act="copyKey">Salin kode</button></div><label>Pakai kode dari perangkat lain<input id="newkey" maxlength="64" placeholder="Tempel kode di sini" autocomplete="off"></label><button class="btn ghost" data-act="useKey">Gunakan kode ini</button></div></div>`;

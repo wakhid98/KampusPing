@@ -9,7 +9,7 @@ self.addEventListener("fetch", e => {
     .catch(() => caches.match(r).then(m => m || (r.mode === "navigate" ? caches.match("offline.html") : Response.error()))));
 });
 self.addEventListener("push", e => {
-  const n = (e.data ? e.data.json() : {}).notification || {};
+  let n = {}; try { n = (e.data ? e.data.json() : {}).notification || {}; } catch { /* payload bukan JSON */ }
   e.waitUntil(self.registration.showNotification(n.title || "KampusPing", { body: n.body || "", icon: "icons/icon-192.png", requireInteraction: true, vibrate: [400, 200, 400, 200, 800], tag: "kp" + Date.now() }));
 });
-self.addEventListener("notificationclick", e => { e.notification.close(); e.waitUntil(clients.openWindow("/")); });
+self.addEventListener("notificationclick", e => { e.notification.close(); e.waitUntil(clients.matchAll({ type: "window", includeUncontrolled: true }).then(l => (l.length ? l[0].focus() : clients.openWindow("/")))); });

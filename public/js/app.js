@@ -11,7 +11,7 @@ const ft = { left: 1500, run: false, mode: 25, brk: false, h: null };
 const setTheme = n => { const t = n || (document.documentElement.dataset.theme === "light" ? "dark" : "light"); document.documentElement.dataset.theme = t; try { localStorage.setItem("kp-theme", t); } catch { /* penyimpanan dinonaktifkan */ } };
 try { setTheme(localStorage.getItem("kp-theme") || "light"); } catch { setTheme("light"); }
 const seenWelcome = () => { try { return localStorage.getItem("kp-welcome"); } catch { return 1; } };
-const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, ft, calOff, calSel, conn, slow, scholars, smeta, canInstall: !!installEv, sems, semSel, schDay });
+const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, ft, calOff, calSel, conn, slow, scholars, smeta, canInstall: !!installEv, perm: perm(), isApp: isApp(), sems, semSel, schDay });
 const render = () => { root.innerHTML = V.shell(ctx()); };
 const refresh = () => { if (!dlg.open) keepForm(root, render); };
 let installEv = null;
@@ -27,11 +27,20 @@ function act() { // satu aksi per hari menjaga streak
   const streak = me.lastDone === day(1) ? (me.streak || 0) + 1 : 1, upd = { lastDone: k, streak, best: Math.max(me.best || 0, streak) };
   Object.assign(me, upd); S.patchMe(user.uid, upd);
 }
-async function enablePush() {
-  if (await Notification.requestPermission() !== "granted") return say("Izin notifikasi ditolak browser.");
-  const reg = await navigator.serviceWorker.register("firebase-messaging-sw.js");
+const perm = () => typeof Notification === "undefined" ? "unsupported" : Notification.permission || "default";
+const isApp = () => { try { return matchMedia("(display-mode: standalone)").matches || document.referrer.startsWith("android-app://") || !!navigator.standalone; } catch { return false; } };
+async function enablePush(silent) { // silent: hanya menyinkronkan token bila izin sudah diberikan
+  if (perm() === "unsupported" || !("serviceWorker" in navigator)) return silent ? undefined : say("Perangkat ini tidak mendukung notifikasi web.");
+  if (perm() === "denied") return silent ? undefined : say("Notifikasi diblokir. Buka Pengaturan HP, Aplikasi, KampusPing, Notifikasi, lalu izinkan.");
+  if (silent && perm() !== "granted") return;
+  if (await Notification.requestPermission() !== "granted") { refresh(); return say("Izin notifikasi ditolak."); }
+  const reg = await navigator.serviceWorker.register("firebase-messaging-sw.js"); await navigator.serviceWorker.ready;
   const token = await getToken(getMessaging(S.app), { vapidKey: VAPID, serviceWorkerRegistration: reg });
-  await S.addToken(user.uid, token); say("Notifikasi web aktif.");
+  await S.addToken(user.uid, token); refresh(); if (!silent) say("Notifikasi aktif di perangkat ini.");
+}
+async function testPush() {
+  const reg = await navigator.serviceWorker.ready;
+  await reg.showNotification("KampusPing", { body: "Tes berhasil. Notifikasi dari KampusPing akan tampil seperti ini.", icon: "icons/icon-192.png", requireInteraction: true, vibrate: [300, 150, 300] });
 }
 function tick() {
   ft.left--; const el = $("#ftime"); if (el) el.textContent = G.mmss(ft.left);
@@ -67,7 +76,8 @@ document.addEventListener("click", async e => {
     case "del": { const data = { ...find(id) }; delete data.id; await S.delItem(user.uid, id); say("Item dihapus.", () => S.setItem(user.uid, id, data)); break; }
     case "undo": toast.className = ""; undo?.(); break;
     case "saveChat": { const v = $("#chat").value.trim(); if (v && !/^-?\d{5,20}$/.test(v)) return say("Chat ID harus berupa angka."); await S.patchMe(user.uid, { tgChatId: v }); me.tgChatId = v; say("Chat ID tersimpan."); break; }
-    case "push": enablePush().catch(err => say(err.message)); break;
+    case "push": enablePush(false).catch(err => say(err.message)); break;
+    case "pushTest": testPush().then(() => say("Notifikasi uji dikirim ke perangkat ini.")).catch(err => say(err.message)); break;
     case "clearDone": { const n = items.filter(x => x.done); if (!n.length) say("Tidak ada item selesai."); else if (confirm(`Hapus ${n.length} item yang sudah selesai? Ini tidak bisa diurungkan.`)) { await Promise.all(n.map(x => S.delItem(user.uid, x.id))); say(`${n.length} item dihapus.`); } break; }
     case "att": { const k = day(0), cur = me.attend || {}; me.attend = { ...cur, [id]: { ...(cur[id] || {}), [k]: d.s } }; await S.patchMe(user.uid, { attend: { [id]: { [k]: d.s } } }); say("Presensi dicatat."); refresh(); break; }
     case "start": try { localStorage.setItem("kp-welcome", "1"); } catch { /* abaikan */ } overlay.hidden = true; break;
@@ -122,6 +132,7 @@ S.watchCfg(c => { cfg = c; refresh(); });
 S.watchScholars(a => { scholars = a; refresh(); });
 S.watchSemesters(a => { sems = a; refresh(); });
 S.watchScholarMeta(m => { smeta = m; refresh(); });
+if (perm() === "granted") enablePush(true).catch(() => { /* token disinkronkan lagi saat berikutnya */ });
 S.watchItems(user.uid, arr => {
   items = arr;
   if (first) { first = false; if (!arr.length && !seenWelcome()) { overlay.hidden = false; overlay.innerHTML = G.welcome(); } }
