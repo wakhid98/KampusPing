@@ -53,10 +53,11 @@ export const delItem = (u, id) => op("DELETE", `items/${u}/${id}`);
 export const patchItem = (u, id, x) => put(`items/${u}/${id}`, x);
 const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) v && typeof v === "object" && !Array.isArray(v) ? flat(v, p + k + "/", out) : out[p + k] = v; return out; };
 export const patchMe = (u, x) => put(`users/${u}`, flat(x));
+export const setMe = (u, p, v) => op(v === null ? "DELETE" : "PUT", `users/${u}/${p}`, v === null ? undefined : v);
 export const addToken = (u, t) => op("PUT", `users/${u}/fcm/${t}`, true);
-const OK = ["streak", "best", "lastDone", "lastNote", "prefs", "focus", "grades", "attend", "tgChatId"];
+const OK = ["streak", "best", "lastDone", "lastNote", "prefs", "grades", "attend", "tgChatId", "notes", "co", "cx", "siakad", "ui"];
 export const restore = (u, d) => { // impor disaring: hanya kolom yang dikenal
-  const items = {}; for (const [id, x] of Object.entries(d.items || {})) if (x && ["task", "scholar"].includes(x.type) && typeof x.title === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(x.when || ""))
-    items[id.replace(/[.$#[\]/]/g, "_").slice(0, 40)] = { type: x.type, title: x.title.slice(0, 120), course: String(x.course || "").slice(0, 80), when: x.when, weight: Math.min(3, Math.max(1, +x.weight || 1)), step: String(x.step || "").slice(0, 200), done: !!x.done, list: String(x.list || "Utama").slice(0, 40), star: !!x.star, note: String(x.note || "").slice(0, 500), repeat: ["daily", "weekly", "monthly"].includes(x.repeat) ? x.repeat : "" };
+  const items = {}; for (const [id, x] of Object.entries(d.items || {})) if (x && ["task", "scholar", "event"].includes(x.type) && typeof x.title === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(x.when || ""))
+    items[id.replace(/[.$#[\]/]/g, "_").slice(0, 40)] = { type: x.type, title: x.title.slice(0, 120), course: String(x.course || "").slice(0, 80), when: x.when, weight: Math.min(3, Math.max(1, +x.weight || 1)), step: String(x.step || "").slice(0, 200), done: !!x.done, list: String(x.list || "Utama").slice(0, 40), star: !!x.star, note: String(x.note || "").slice(0, 500), repeat: ["daily", "weekly", "monthly", "yearly"].includes(x.repeat) ? x.repeat : "", ...(x.type === "event" ? { allDay: !!x.allDay, end: /^\d{2}:\d{2}$/.test(x.end || "") ? x.end : "", place: String(x.place || "").slice(0, 80), remind: Math.min(1440, Math.max(-1, +x.remind || 0)) } : {}) };
   return Promise.all([op("PUT", `items/${u}`, Object.keys(items).length ? items : null), ...OK.filter(k => d.me?.[k] !== undefined).map(k => op("PUT", `users/${u}/${k}`, d.me[k]))]);
 };

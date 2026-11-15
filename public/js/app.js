@@ -4,16 +4,22 @@ import { VAPID } from "./firebase-config.js";
 import { getMessaging, getToken } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging.js";
 import * as V from "./views.js";
 import * as G from "./pages.js";
+import * as X from "./extra.js";
+import * as A from "./agenda.js";
+import * as T from "./theme.js";
 const $ = s => document.querySelector(s), root = $("#app"), dlg = $("#dlg"), toast = $("#toast"), overlay = $("#gate");
 const user = { uid: S.deviceKey() };
-let me = {}, items = [], courses = [], scholars = [], smeta = {}, sems = [], semSel = "", schDay = null, cfg = {}, view = "home", q = "", flt = "active", lst = "*all", calOff = 0, calSel = "", tmr, undo, first = true, conn = false, slow = false;
-const ft = { left: 1500, run: false, mode: 25, brk: false, h: null };
-const setTheme = n => { const t = n || (document.documentElement.dataset.theme === "light" ? "dark" : "light"); document.documentElement.dataset.theme = t; try { localStorage.setItem("kp-theme", t); } catch { /* penyimpanan dinonaktifkan */ } };
-try { setTheme(localStorage.getItem("kp-theme") || "light"); } catch { setTheme("light"); }
+let me = {}, items = [], courses = [], scholars = [], smeta = {}, sems = [], semSel = "", schDay = null, noteSel = "", noteQ = "", noteCat = "*all", noteSort = "upd", cfg = {}, view = "home", q = "", flt = "active", lst = "*all", calOff = 0, calSel = "", tmr, undo, first = true, conn = false, slow = false;
+let ui = T.load(), uiAt = 0;
+try { if (!localStorage.getItem("kp-ui")) { const o = localStorage.getItem("kp-theme"); if (o === "dark" || o === "light") ui = T.clean({ ...ui, mode: o }); } } catch { /* abaikan */ }
+T.apply(ui);
+const setUi = o => { ui = T.apply({ ...ui, ...o }); T.save(ui); uiAt = Date.now(); S.setMe(user.uid, "ui", ui).catch(() => {}); refresh(); };
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (ui.mode === "auto") { T.apply(ui); refresh(); } });
 const seenWelcome = () => { try { return localStorage.getItem("kp-welcome"); } catch { return 1; } };
-const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, ft, calOff, calSel, conn, slow, scholars, smeta, canInstall: !!installEv, perm: perm(), isApp: isApp(), sems, semSel, schDay });
+const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, calOff, calSel, conn, slow, scholars, smeta, canInstall: !!installEv, perm: perm(), isApp: isApp(), sems, semSel, schDay, ui, noteSel, noteQ, noteCat, noteSort });
 const render = () => { root.innerHTML = V.shell(ctx()); };
-const refresh = () => { if (!dlg.open) keepForm(root, render); };
+const editing = () => view === "note" && document.activeElement?.dataset?.note;
+const refresh = () => { if (!dlg.open && !editing()) keepForm(root, render); };
 let installEv = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEv = e; refresh(); });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("firebase-messaging-sw.js").catch(() => { /* tanpa service worker, web tetap jalan */ });
@@ -21,7 +27,9 @@ function say(msg, fn) { clearTimeout(tmr); undo = fn; toast.innerHTML = `<span>$
 const find = id => items.find(x => x.id === id);
 const day = n => new Date(Date.now() + 252e5 - n * 864e5).toISOString().slice(0, 10);
 const prefs = o => { me.prefs = { ...(me.prefs || {}), ...o }; return S.patchMe(user.uid, { prefs: o }); };
-const openForm = (t, id) => { dlg.innerHTML = V.form(t, id ? find(id) : {}, id, V.lists(items)); dlg.showModal(); };
+const openForm = (t, id, pre) => { dlg.innerHTML = V.form(t, id ? find(id) : pre || {}, id, V.lists(items)); dlg.showModal(); };
+const findCls = id => A.effCourses(courses, me, "").find(x => x.id === id);
+const today = () => new Date(Date.now() + 252e5).toISOString().slice(0, 10);
 function act() { // satu aksi per hari menjaga streak
   const k = day(0); if (me.lastDone === k) return;
   const streak = me.lastDone === day(1) ? (me.streak || 0) + 1 : 1, upd = { lastDone: k, streak, best: Math.max(me.best || 0, streak) };
@@ -42,14 +50,37 @@ async function testPush() {
   const reg = await navigator.serviceWorker.ready;
   await reg.showNotification("KampusPing", { body: "Tes berhasil. Notifikasi dari KampusPing akan tampil seperti ini.", icon: "icons/icon-192.png", requireInteraction: true, vibrate: [300, 150, 300] });
 }
-function tick() {
-  ft.left--; const el = $("#ftime"); if (el) el.textContent = G.mmss(ft.left);
-  if (ft.left > 0) return;
-  clearInterval(ft.h); ft.run = false; navigator.vibrate?.([300, 150, 300]);
-  if (!ft.brk) { const k = day(0), n = (me.focus?.[k] || 0) + 1; me.focus = { ...(me.focus || {}), [k]: n }; S.patchMe(user.uid, { focus: { [k]: n } }); act(); say("Sesi fokus selesai. Istirahat 5 menit."); ft.brk = true; ft.left = 300; }
-  else { say("Istirahat selesai."); ft.brk = false; ft.left = ft.mode * 60; }
-  if (view === "fokus") render();
+const nid = () => "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+let nTimer = 0;
+const redrawList = () => { const l = $("#nlist"); if (l) l.innerHTML = X.noteList(ctx()); };
+async function saveNote() {
+  clearTimeout(nTimer); const id = noteSel, el = $("#nt-body"); if (!id || !me.notes?.[id] || !el) return;
+  const v = { title: $("#nt-title").value.trim().slice(0, 100), cat: $("#nt-cat").value.trim().slice(0, 30), body: el.value.slice(0, 10000) }, o = me.notes[id];
+  if (v.title === (o.title || "") && v.cat === (o.cat || "") && v.body === (o.body || "")) return;
+  v.t = Date.now(); me.notes = { ...me.notes, [id]: { ...o, ...v } }; redrawList();
+  try { await S.patchMe(user.uid, { notes: { [id]: v } }); } catch { /* pesan galat sudah ditampilkan */ }
 }
+const patchNote = f => { const id = noteSel; if (!id || !me.notes?.[id]) return; me.notes = { ...me.notes, [id]: { ...me.notes[id], ...f } }; S.patchMe(user.uid, { notes: { [id]: f } }); keepForm(root, render); };
+function newNote() {
+  saveNote(); const id = nid(), now = Date.now(), n = { title: "", body: "", cat: noteCat && !noteCat.startsWith("*") ? noteCat : "", color: "", pin: noteCat === "*pin", arch: false, c: now, t: now };
+  if (noteCat === "*arch") noteCat = "*all"; me.notes = { ...(me.notes || {}), [id]: n }; noteSel = id; render(); S.setMe(user.uid, `notes/${id}`, n); $("#nt-title")?.focus();
+}
+const shown = new Set();
+async function remind() { // pengingat agenda saat aplikasi terbuka; server (notify.js) mengirim saat aplikasi tertutup
+  if ((me.prefs || {}).event === false) return;
+  const W = Date.now(), d0 = today(), d1 = A.addDays(d0, 1);
+  for (const x of items) {
+    if (x.type !== "event" || !(x.remind >= 0)) continue;
+    for (const d of [d0, d1]) {
+      const st = A.evStart(x, d), key = "e" + d; if (!A.occurs(x, d) || W < st - x.remind * 6e4 || W > st + 30 * 6e4 || x.sent?.[key] || shown.has(x.id + key)) continue;
+      shown.add(x.id + key); const body = (x.allDay ? "Hari ini" : A.evTime(x)) + (x.place ? " · " + x.place : "") + (x.note ? "\n" + x.note : "");
+      if (perm() === "granted") { try { const reg = await navigator.serviceWorker.ready; await reg.showNotification("📅 " + x.title, { body, icon: "icons/icon-192.png", tag: x.id + key, requireInteraction: true, vibrate: [300, 150, 300] }); } catch { say("Pengingat: " + x.title); } }
+      else say("Pengingat: " + x.title + " · " + body.split("\n")[0]);
+      S.patchItem(user.uid, x.id, { ["sent/" + key]: true }).catch(() => {});
+    }
+  }
+}
+setInterval(() => { if (!document.hidden) remind(); }, 30000);
 document.addEventListener("click", async e => {
   const b = e.target.closest("[data-act]"); if (!b) return;
   const d = b.dataset, id = d.id;
@@ -59,7 +90,7 @@ document.addEventListener("click", async e => {
     case "nav": view = d.v; q = ""; flt = "active"; render(); break;
     case "flt": flt = d.f; render(); break;
     case "lst": lst = d.l; render(); break;
-    case "add": openForm(d.t); break;
+    case "add": if (d.t === "note") newNote(); else openForm(d.t, null, d.t === "event" ? { when: `${calSel || today()}T08:00`, remind: 15 } : undefined); break;
     case "edit": openForm(find(id).type, id); break;
     case "done": {
       const it = find(id), to = d.to === "true";
@@ -88,19 +119,47 @@ document.addEventListener("click", async e => {
     case "calNav": calOff += +d.n; render(); break;
     case "calToday": calOff = 0; calSel = ""; render(); break;
     case "calDay": calSel = d.d; render(); break;
-    case "theme": setTheme(); break;
+    case "theme": setUi({ mode: document.documentElement.dataset.theme === "dark" ? "light" : "dark" }); break;
     case "export": { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({ v: 1, me, items: Object.fromEntries(items.map(({ id: i, ...x }) => [i, x])) })], { type: "application/json" })); a.download = "kampusping-cadangan.json"; a.click(); break; }
-    case "ftToggle": ft.run = !ft.run; clearInterval(ft.h); if (ft.run) ft.h = setInterval(tick, 1000); render(); break;
-    case "ftReset": clearInterval(ft.h); Object.assign(ft, { run: false, brk: false, left: ft.mode * 60 }); render(); break;
-    case "ftMode": clearInterval(ft.h); Object.assign(ft, { mode: +d.m, run: false, brk: false, left: +d.m * 60 }); render(); break;
+    case "uiMode": setUi({ mode: d.k }); break;
+    case "uiBgL": setUi({ bgL: d.k }); break;
+    case "uiBgD": setUi({ bgD: d.k }); break;
+    case "uiAcc": setUi({ acc: d.k }); break;
+    case "uiR": setUi({ r: +d.v }); break;
+    case "uiFs": setUi({ fs: +d.v }); break;
+    case "uiReset": setUi({ ...T.DEF }); say("Tema dikembalikan ke bawaan."); break;
+    case "saveSiakad": { const v = $("#siakad").value.trim(); if (v && !/^https:\/\//.test(v)) return say("Alamat harus diawali https://"); await S.setMe(user.uid, "siakad", v ? v.slice(0, 300) : null); me.siakad = v; say(v ? "Alamat SIAKAD-mu disimpan." : "Memakai alamat bawaan admin."); refresh(); break; }
+    case "resetSiakad": await S.setMe(user.uid, "siakad", null); delete me.siakad; say("Memakai alamat bawaan admin."); refresh(); break;
+    case "clsAdd": dlg.innerHTML = V.form("cls", { day: new Date(Date.now() + 252e5).getUTCDay() }, ""); dlg.showModal(); break;
+    case "clsEdit": { const x = findCls(id); if (!x) return; dlg.innerHTML = V.form("cls", x, id); dlg.showModal(); break; }
+    case "clsReset": if (confirm("Kembalikan semua perubahan pada jadwal admin (termasuk yang disembunyikan)? Jadwal pribadi yang kamu tambah tetap ada.")) { await S.setMe(user.uid, "co", null); delete me.co; say("Jadwal admin dikembalikan."); refresh(); } break;
+    case "noteNew": newNote(); break;
+    case "noteOpen": saveNote(); noteSel = id; render(); break;
+    case "noteBack": saveNote(); noteSel = ""; render(); break;
+    case "noteCat": saveNote(); noteCat = d.k; noteSel = ""; render(); break;
+    case "notePin": patchNote({ pin: !me.notes?.[noteSel]?.pin }); break;
+    case "noteColor": patchNote({ color: d.k }); break;
+    case "noteArch": { const n = me.notes?.[noteSel]; if (!n) return; const k = noteSel, to = !n.arch; await saveNote(); patchNote({ arch: to }); if (to && noteCat !== "*arch") { noteSel = ""; render(); } say(to ? "Diarsipkan." : "Dikeluarkan dari arsip.", () => S.patchMe(user.uid, { notes: { [k]: { arch: !to } } })); break; }
+    case "noteCopy": { const n = me.notes?.[noteSel]; if (n) navigator.clipboard?.writeText(`${$("#nt-title")?.value || n.title}\n\n${$("#nt-body")?.value ?? n.body}`).then(() => say("Catatan disalin.")).catch(() => say("Gagal menyalin.")); break; }
+    case "noteDel": { const k = noteSel, n = me.notes?.[k]; if (!n) return; clearTimeout(nTimer); const data = { ...n }; const m = { ...me.notes }; delete m[k]; me.notes = m; noteSel = ""; render(); await S.setMe(user.uid, `notes/${k}`, null); say("Catatan dihapus.", () => S.setMe(user.uid, `notes/${k}`, data)); break; }
+    case "noteExport": { const t = X.noteArr(me).sort((a, b) => (b.t || 0) - (a.t || 0)).map(n => `# ${n.title || "Tanpa judul"}${n.cat ? "  [" + n.cat + "]" : ""}${n.arch ? "  (arsip)" : ""}\n${n.body || ""}\n`).join("\n----------------\n\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t || "Belum ada catatan."], { type: "text/plain" })); a.download = "kampusping-catatan.txt"; a.click(); break; }
     case "gAdd": me.grades = [...(me.grades || []), { name: "", sks: 2, nilai: "A", smt: +d.s || 1 }]; S.patchMe(user.uid, { grades: me.grades }); render(); break;
     case "gSem": { const next = Math.max(0, ...(me.grades || []).map(x => x.smt || 1)) + 1; if (next > 14) return say("Maksimal 14 semester."); me.grades = [...(me.grades || []), { name: "", sks: 2, nilai: "A", smt: next }]; S.patchMe(user.uid, { grades: me.grades }); render(); break; }
     case "gDel": me.grades = (me.grades || []).filter((_, i) => i !== +d.i); S.patchMe(user.uid, { grades: me.grades }); render(); break;
   }
 });
-document.addEventListener("input", e => { if (e.target.id === "q") { q = e.target.value; $("#rows").innerHTML = V.rows(ctx()); } });
+document.addEventListener("input", e => {
+  const t = e.target;
+  if (t.id === "q") { q = t.value; $("#rows").innerHTML = V.rows(ctx()); }
+  if (t.id === "nq") { noteQ = t.value; redrawList(); }
+  if (t.dataset?.note) { clearTimeout(nTimer); nTimer = setTimeout(saveNote, 700); const b = $("#nt-body"), c = $("#nt-count"); if (b && c) c.textContent = `${(b.value.trim().match(/\S+/g) || []).length} kata · ${b.value.length}/10000 karakter · menyimpan...`; }
+});
+document.addEventListener("focusout", e => { if (e.target.dataset?.note) saveNote().then(() => setTimeout(refresh, 50)); });
+document.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === " ") && e.target.matches?.('[role="button"][data-act]')) { e.preventDefault(); e.target.click(); } });
 document.addEventListener("change", e => {
   const t = e.target.dataset;
+  if (e.target.id === "nsort") { noteSort = e.target.value; redrawList(); }
+  if (t.ui === "acc") setUi({ acc: e.target.value });
   if (t.pref) prefs({ [t.pref]: e.target.checked }).then(() => say("Pengaturan disimpan."));
   if (t.import) { const f = e.target.files[0]; if (f) f.text().then(x => S.restore(user.uid, JSON.parse(x))).then(() => say("Data dipulihkan.")).catch(() => say("File cadangan tidak valid.")); }
   if (t.g) { const [i, k] = t.g.split("."), g = [...(me.grades || [])]; g[i] = { ...g[i], [k]: k === "sks" ? +e.target.value : e.target.value }; me.grades = g; S.patchMe(user.uid, { grades: g }); refresh(); }
@@ -109,8 +168,38 @@ document.addEventListener("submit", e => {
   if (e.target.id !== "qa") return; e.preventDefault(); const v = $("#qa-t").value.trim(); if (!v) return;
   const o = G.quick(v); S.addItem(user.uid, { type: "task", title: o.title.slice(0, 120), when: o.when, weight: 1, course: "" }).then(() => say(`Tugas ditambahkan: ${o.title}`));
 });
+async function saveEvent(f) {
+  const fd = new FormData(f), g = k => String(fd.get(k) || "").trim(), id = f.dataset.id, allDay = fd.get("allDay") === "on", date = g("date"), time = g("time"), end = g("end");
+  if (!g("title") || !/^\d{4}-\d{2}-\d{2}$/.test(date)) return say("Isi judul dan tanggal.");
+  if (!allDay && !/^\d{2}:\d{2}$/.test(time)) return say("Isi jam mulai.");
+  if (!allDay && end && end <= time) return say("Jam selesai harus setelah jam mulai.");
+  const o = { title: g("title").slice(0, 120), when: `${date}T${allDay ? "00:00" : time}`, allDay, end: allDay ? "" : end, place: g("place").slice(0, 80), note: g("note").slice(0, 500), repeat: g("repeat"), remind: +g("remind") };
+  try {
+    if (id) await S.patchItem(user.uid, id, { ...o, sent: null }); else await S.addItem(user.uid, { type: "event", ...o });
+    dlg.close(); say(+o.remind >= 0 && perm() !== "granted" && !me.tgChatId ? "Agenda tersimpan. Aktifkan notifikasi di Atur agar pengingat masuk ke HP." : "Agenda tersimpan.");
+    calSel = date; if (view === "cal") { const W = new Date(Date.now() + 252e5); calOff = (+date.slice(0, 4) - W.getUTCFullYear()) * 12 + (+date.slice(5, 7) - 1 - W.getUTCMonth()); render(); }
+  } catch { say("Gagal menyimpan agenda."); }
+}
+async function saveCls(f, how) {
+  const fd = new FormData(f), g = k => String(fd.get(k) || "").trim(), id = f.dataset.id, x = id ? findCls(id) : null, uid = user.uid;
+  try {
+    if (how === "reset") await S.setMe(uid, `co/${id}`, null);
+    else if (how === "del") { if (x.own) await S.setMe(uid, `cx/${id}`, null); else await S.setMe(uid, `co/${id}/hide`, true); }
+    else {
+      const o = { title: g("title").slice(0, 100), day: +g("day"), time: g("time"), end: g("end"), room: g("room").slice(0, 60), lecturer: g("lecturer").slice(0, 80) };
+      if (!o.title || !/^\d{2}:\d{2}$/.test(o.time)) return say("Isi nama dan jam mulai.");
+      if (o.end && o.end <= o.time) return say("Jam selesai harus setelah jam mulai.");
+      if (!id) await S.setMe(uid, `cx/${nid()}`, { ...o, sem: cfg.activeSemester || "" });
+      else if (x.own) await S.setMe(uid, `cx/${id}`, { ...o, sem: x.sem || "" });
+      else { const b = courses.find(c => c.id === id) || {}, diff = {}; for (const k of Object.keys(o)) if (String(o[k] ?? "") !== String(b[k] ?? "")) diff[k] = o[k]; await S.setMe(uid, `co/${id}`, Object.keys(diff).length ? diff : null); }
+    }
+    dlg.close(); say(how === "reset" ? "Dikembalikan ke jadwal admin." : how === "del" ? (x.own ? "Jadwal dihapus." : "Kelas disembunyikan. Pulihkan lewat Kembalikan jadwal admin.") : "Jadwal tersimpan.");
+  } catch { say("Gagal menyimpan jadwal."); }
+}
 dlg.addEventListener("submit", async e => {
   e.preventDefault(); if (e.submitter?.value === "cancel") return dlg.close();
+  if (e.target.dataset.t === "cls") return saveCls(e.target, e.submitter?.value);
+  if (e.target.dataset.t === "event") return saveEvent(e.target);
   const f = e.target, fd = new FormData(f), o = Object.fromEntries(fd), id = f.dataset.id, old = id ? find(id) : null;
   if (o.weight) o.weight = +o.weight;
   if (o.link && !/^https:\/\//.test(o.link)) return say("Tautan harus diawali https://");
@@ -125,7 +214,7 @@ dlg.addEventListener("submit", async e => {
 setInterval(() => { if (user && !document.hidden && $("#rows") && !dlg.open) $("#rows").innerHTML = V.rows(ctx()); }, 60000);
 S.setDbErr(e => say(e?.code === "PERMISSION_DENIED" || /permission/i.test(e?.message || "") ? "Ditolak oleh aturan database. Jalankan: firebase deploy --only database" : "Koneksi ke database bermasalah. Periksa internet."));
 setTimeout(() => { if (!conn) { slow = true; refresh(); } }, 4000);
-S.watchMe(user.uid, v => { me = v || {}; refresh(); });
+S.watchMe(user.uid, v => { me = v || {}; if (me.ui && Date.now() - uiAt > 5000) { const n = T.clean(me.ui); if (JSON.stringify(n) !== JSON.stringify(ui)) { ui = T.apply(n); T.save(ui); } } refresh(); });
 S.watchConn(v => { conn = v; refresh(); });
 S.watchCourses(a => { courses = a; refresh(); });
 S.watchCfg(c => { cfg = c; refresh(); });

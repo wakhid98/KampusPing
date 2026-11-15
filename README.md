@@ -42,3 +42,13 @@ Web ini sudah siap dipasang sebagai aplikasi (ikon, manifest, service worker, ha
 2. Setelah APK dipasang: buka aplikasi, Pengaturan, **Aktifkan notifikasi**, pilih Izinkan. Tekan **Kirim notifikasi uji** untuk memastikan tampil.
 3. Android: Pengaturan HP, Aplikasi, KampusPing, Notifikasi harus aktif; hemat baterai jangan membatasi aplikasi. Pada Android 13 ke atas izin notifikasi muncul sebagai kotak dialog.
 4. Telegram tetap menjadi cadangan bila notifikasi aplikasi terlambat.
+
+## Pembaruan v17
+- **Agenda di kalender**: tombol **+ Agenda** (kalender, beranda). Isi judul, tanggal, jam, tempat, catatan, ulangi (harian/mingguan/bulanan/tahunan), dan **pengingat** (tepat waktu sampai 1 hari sebelum). Pengingat dikirim `scripts/notify.js` (notifikasi/Telegram) dan juga muncul saat aplikasi terbuka. Pengingat bisa dimatikan di Atur > Jenis pengingat > Agenda.
+- **Jadwal**: hari **Minggu** selalu tampil dan menampilkan agenda bila ada (agenda minggu ini muncul di kolom hari masing-masing).
+- **Catatan**: notepad dengan kategori, warna label, sematkan, arsip, cari, urutkan, simpan otomatis, ekspor .txt, dan ringkasan inventaris.
+- **Fokus** dihapus.
+- **Tema** (Atur > Tampilan): mode terang/gelap/ikut HP, 5 latar terang, 5 latar gelap (perpaduan warna baru), 6 warna aksen + warna sendiri, ukuran sudut dan huruf. Tersimpan di perangkat dan tersinkron lewat kode sinkron.
+- **Jadwal per pengguna**: ketuk kelas untuk mengubah, sembunyikan, atau tambah **jadwal pribadi**. Jadwal admin tetap bawaan dan tidak berubah untuk orang lain; tombol "Kembalikan jadwal admin" membatalkan perubahan. Pengingat kuliah memakai jadwal pribadi.
+- **SIAKAD per pengguna**: Atur > Alamat SIAKAD. Kosong = memakai alamat bawaan admin.
+- Wajib deploy aturan baru: `firebase deploy --only hosting,database`.

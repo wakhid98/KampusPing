@@ -1,10 +1,11 @@
 // GitHub Actions tiap 5 menit. Membaca Realtime Database, mengirim Telegram + FCM.
 import admin from "firebase-admin";
+import { effCourses, occurs, evStart, evTime, addDays } from "../public/js/agenda.js";
 admin.initializeApp({ credential: admin.credential.cert(JSON.parse(process.env.FIREBASE_SA)), databaseURL: process.env.DB_URL });
 const db = admin.database(), TG = process.env.TG_TOKEN, SITE = process.env.SITE_URL || "";
 const val = async p => (await db.ref(p).once("value")).val();
 const H = 36e5, D = 24 * H, now = Date.now(), W = new Date(now + 7 * H), ymd = W.toISOString().slice(0, 10), hm = W.getUTCHours() * 60 + W.getUTCMinutes();
-const cfg = (await val("config")) || {}, courses = Object.entries((await val("courses")) || {}).map(([id, x]) => ({ id, ...x })).filter(x => !cfg.activeSemester || x.sem === cfg.activeSemester);
+const cfg = (await val("config")) || {}, allCourses = Object.entries((await val("courses")) || {}).map(([id, x]) => ({ id, ...x }));
 if (hm >= (cfg.quietStart ?? 22) * 60 || hm < (cfg.quietEnd ?? 5) * 60) process.exit(0); // jam tenang (atur admin)
 const left = t => t >= D ? `${Math.round(t / D)} hari` : t >= H ? `${Math.round(t / H)} jam` : `${Math.round(t / 6e4)} menit`;
 async function send(uid, u, title, body) {
@@ -18,7 +19,7 @@ async function send(uid, u, title, body) {
 }
 const users = (await val("users")) || {}, all = (await val("items")) || {};
 for (const [uid, u] of Object.entries(users)) {
-  const sent = u.sent || {}, msgs = [], mark = {}, P = u.prefs || {};
+  const sent = u.sent || {}, msgs = [], mark = {}, P = u.prefs || {}, courses = effCourses(allCourses, u, cfg.activeSemester || ""); // jadwal admin + perubahan pribadi
   if (!(u.tgChatId && TG) && !Object.keys(u.fcm || {}).length) continue; // belum ada jalur kirim: jangan tandai terkirim
   if (P.class !== false) for (const x of courses) if (x.day === W.getUTCDay()) {
     const [h, m] = x.time.split(":").map(Number), st = Date.UTC(W.getUTCFullYear(), W.getUTCMonth(), W.getUTCDate(), h, m) - 7 * H, k = "c" + x.id + ymd;
@@ -27,7 +28,14 @@ for (const [uid, u] of Object.entries(users)) {
   for (const [id, x] of Object.entries(all[uid] || {})) {
     if (x.done || x.type === "class" || P[x.type] === false) continue;
     const s = x.sent || {}, upd = {};
-    if (x.type === "task" || x.type === "scholar") {
+    if (x.type === "event") { // agenda kalender: pengingat sebelum mulai, mendukung agenda berulang
+      if (!(x.remind >= 0)) continue;
+      for (const d of [ymd, addDays(ymd, 1)]) {
+        const st = evStart(x, d), k = "e" + d;
+        if (!occurs(x, d) || now < st - x.remind * 6e4 || now > st + 30 * 6e4 || s[k]) continue;
+        const dif = st - now; msgs.push([`📅 Agenda ${dif > 6e4 ? left(dif) + " lagi" : "dimulai"}`, `${x.title}${x.allDay ? "" : " · " + evTime(x)}${x.place ? " di " + x.place : ""}${x.note ? "\n" + x.note : ""}`]); upd[k] = true;
+      }
+    } else if (x.type === "task" || x.type === "scholar") {
       const t = Date.parse(x.when + ":00+07:00") - now, o = x.type === "task" ? [3 * H, D, 3 * D, 7 * D] : [D, 3 * D, 7 * D, 14 * D], i = t > 0 ? o.findIndex(v => t <= v) : -1;
       if (i >= 0 && !s["o" + i]) { for (let j = i; j < o.length; j++) upd["o" + j] = true;
         msgs.push([`${x.type === "task" ? "📝 Tugas" : "🎓 Beasiswa"} tinggal ${left(t)}`, x.title + (x.step ? `\nBerikutnya: ${x.step}` : "")]); }

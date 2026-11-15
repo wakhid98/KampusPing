@@ -172,6 +172,121 @@
     "annId": {
      ".validate": "newData.isNumber()"
     },
+    "co": {
+     "$id": {
+      "title": {
+       ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+      },
+      "day": {
+       ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6"
+      },
+      "time": {
+       ".validate": "newData.isString() && newData.val().matches(/^[0-2][0-9]:[0-5][0-9]$/)"
+      },
+      "end": {
+       ".validate": "newData.isString() && (newData.val() === '' || newData.val().matches(/^[0-2][0-9]:[0-5][0-9]$/))"
+      },
+      "room": {
+       ".validate": "newData.isString() && newData.val().length <= 60"
+      },
+      "lecturer": {
+       ".validate": "newData.isString() && newData.val().length <= 80"
+      },
+      "$o": {
+       ".validate": false
+      },
+      "hide": {
+       ".validate": "newData.isBoolean()"
+      }
+     }
+    },
+    "cx": {
+     "$id": {
+      ".validate": "newData.hasChildren(['title','day','time'])",
+      "title": {
+       ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 100"
+      },
+      "day": {
+       ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 6"
+      },
+      "time": {
+       ".validate": "newData.isString() && newData.val().matches(/^[0-2][0-9]:[0-5][0-9]$/)"
+      },
+      "end": {
+       ".validate": "newData.isString() && (newData.val() === '' || newData.val().matches(/^[0-2][0-9]:[0-5][0-9]$/))"
+      },
+      "room": {
+       ".validate": "newData.isString() && newData.val().length <= 60"
+      },
+      "lecturer": {
+       ".validate": "newData.isString() && newData.val().length <= 80"
+      },
+      "$o": {
+       ".validate": false
+      },
+      "sem": {
+       ".validate": "newData.isString() && newData.val().length <= 40"
+      }
+     }
+    },
+    "notes": {
+     "$id": {
+      ".validate": "newData.hasChildren(['t','c'])",
+      "title": {
+       ".validate": "newData.isString() && newData.val().length <= 100"
+      },
+      "body": {
+       ".validate": "newData.isString() && newData.val().length <= 10000"
+      },
+      "cat": {
+       ".validate": "newData.isString() && newData.val().length <= 30"
+      },
+      "color": {
+       ".validate": "newData.isString() && newData.val().matches(/^(|y|g|b|p|v)$/)"
+      },
+      "pin": {
+       ".validate": "newData.isBoolean()"
+      },
+      "arch": {
+       ".validate": "newData.isBoolean()"
+      },
+      "t": {
+       ".validate": "newData.isNumber()"
+      },
+      "c": {
+       ".validate": "newData.isNumber()"
+      },
+      "$o": {
+       ".validate": false
+      }
+     }
+    },
+    "siakad": {
+     ".validate": "newData.isString() && newData.val().length <= 300 && (newData.val() === '' || newData.val().matches(/^https:\\/\\//))"
+    },
+    "ui": {
+     "mode": {
+      ".validate": "newData.val() === 'light' || newData.val() === 'dark' || newData.val() === 'auto'"
+     },
+     "bgL": {
+      ".validate": "newData.isString() && newData.val().length <= 20"
+     },
+     "bgD": {
+      ".validate": "newData.isString() && newData.val().length <= 20"
+     },
+     "acc": {
+      ".validate": "newData.isString() && newData.val().length <= 20 && newData.val().matches(/^([a-z]+|#[0-9a-fA-F]{6})$/)"
+     },
+     "r": {
+      ".validate": "newData.isNumber() && newData.val() >= 6 && newData.val() <= 32"
+     },
+     "fs": {
+      ".validate": "newData.isNumber() && newData.val() >= 12 && newData.val() <= 20"
+     },
+     "$o": {
+      ".validate": false
+     }
+    },
     "$o": {
      ".validate": false
     }
@@ -186,7 +301,7 @@
     "$id": {
      ".validate": "newData.hasChildren(['type','title','done'])",
      "type": {
-      ".validate": "newData.val() === 'task' || newData.val() === 'scholar'"
+      ".validate": "newData.val() === 'task' || newData.val() === 'scholar' || newData.val() === 'event'"
      },
      "title": {
       ".validate": "newData.isString() && newData.val().length > 0 && newData.val().length <= 120"
@@ -217,9 +332,6 @@
        ".validate": "newData.isBoolean()"
       }
      },
-     "$o": {
-      ".validate": false
-     },
      "list": {
       ".validate": "newData.isString() && newData.val().length <= 40"
      },
@@ -230,7 +342,7 @@
       ".validate": "newData.isString() && newData.val().length <= 500"
      },
      "repeat": {
-      ".validate": "newData.val() === '' || newData.val() === 'daily' || newData.val() === 'weekly' || newData.val() === 'monthly'"
+      ".validate": "newData.val() === '' || newData.val() === 'daily' || newData.val() === 'weekly' || newData.val() === 'monthly' || newData.val() === 'yearly'"
      },
      "subs": {
       "$k": {
@@ -244,6 +356,21 @@
         ".validate": false
        }
       }
+     },
+     "end": {
+      ".validate": "newData.isString() && (newData.val() === '' || newData.val().matches(/^[0-2][0-9]:[0-5][0-9]$/))"
+     },
+     "allDay": {
+      ".validate": "newData.isBoolean()"
+     },
+     "place": {
+      ".validate": "newData.isString() && newData.val().length <= 80"
+     },
+     "remind": {
+      ".validate": "newData.isNumber() && newData.val() >= -1 && newData.val() <= 1440"
+     },
+     "$o": {
+      ".validate": false
      }
     }
    }
