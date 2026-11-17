@@ -25,6 +25,8 @@ if (host) {
   const rc = await rq("GET", "config");
   add("Aturan: config bisa dibaca publik", rc === 200, rc === 200 ? "Aturan baru aktif" : rc === 401 ? "401: aturan lama masih aktif. Jalankan: firebase deploy --only database" : "Status " + rc, "rules");
   if (okKey) { const wr = await rq("PUT", `users/${key}/focus/2000-01-01`, "0"); add("Aturan: tulis data pribadi", wr === 200, wr === 200 ? "Penulisan diizinkan" : wr === 401 ? "401: ditolak aturan. Deploy aturan terbaru: firebase deploy --only database" : "Status " + wr, "wr"); if (wr === 200) await rq("DELETE", `users/${key}/focus/2000-01-01`); }
+  if (okKey) { const nb = JSON.stringify({ title: "", body: "", cat: "", color: "", pin: false, arch: false, c: 1, t: 1 }), wn = await rq("PUT", `users/${key}/notes/cek_uji`, nb); add("Aturan: simpan catatan", wn === 200, wn === 200 ? "Catatan bisa disimpan ke database" : wn === 401 ? "401: aturan catatan belum aktif (inilah penyebab catatan ditolak). Jalankan: firebase deploy --only database" : "Status " + wn, "notes"); if (wn === 200) await rq("DELETE", `users/${key}/notes/cek_uji`); }
+  const rr = await rq("GET", "rank"); add("Aturan: peringkat catur bisa dibaca", rr === 200, rr === 200 ? "Peringkat catur aktif" : rr === 401 ? "401: aturan peringkat belum aktif. Jalankan: firebase deploy --only database" : "Status " + rr, "rank");
   add("WebSocket ke database", ws, ws ? "Tersambung" : "Gagal atau lambat. Aplikasi jatuh ke long-polling (bisa lambat sampai sekitar 30 detik). Jaringan, ISP, atau ekstensi mungkin memblokir WebSocket.", "ws");
 }
 if (!miss.length) {

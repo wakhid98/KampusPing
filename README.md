@@ -52,3 +52,11 @@ Web ini sudah siap dipasang sebagai aplikasi (ikon, manifest, service worker, ha
 - **Jadwal per pengguna**: ketuk kelas untuk mengubah, sembunyikan, atau tambah **jadwal pribadi**. Jadwal admin tetap bawaan dan tidak berubah untuk orang lain; tombol "Kembalikan jadwal admin" membatalkan perubahan. Pengingat kuliah memakai jadwal pribadi.
 - **SIAKAD per pengguna**: Atur > Alamat SIAKAD. Kosong = memakai alamat bawaan admin.
 - Wajib deploy aturan baru: `firebase deploy --only hosting,database`.
+
+## Pembaruan v18
+- **Catatan**: catatan kini punya cadangan di perangkat. Jika database menolak (aturan lama masih aktif), catatan tidak hilang, muncul peringatan, dan tersimpan otomatis begitu aturan baru di-deploy. Halaman **cek.html** punya tes baru "Aturan: simpan catatan".
+- **Pengaturan ringkas**: setiap fungsi satu baris dengan tombol aksi (Aktifkan, Atur, Ubah, Ekspor, Impor, Salin). Detail dibuka di lembar, tidak ada fungsi yang dikurangi.
+- **Gambar latar dan karakter**: Atur > Tampilan dan tema. Pilih gambar bawaan (Alam, Hutan, Senja, Angkasa, Imut) atau unggah gambar/PNG sendiri (kartun, karakter favorit). Karakter bisa dipasang di pojok layar dengan ukuran dan transparansi yang diatur. Gambar unggahan disimpan di perangkat, bukan di database.
+- **Teka-Teki Catur** (menu Catur, halaman `catur.html`): 1000 level, skor, dan **peringkat antar pengguna**. Progres tersimpan di database dan ikut kode sinkron. Mesin catur ada di `js/chess.js` (tanpa pustaka luar).
+- Peringkat bersifat kepercayaan: aplikasi tidak memakai login, jadi skor tidak bisa diverifikasi di server. Admin dapat menghapus entri di Firebase Console pada node `rank`.
+- Deploy ulang: `firebase deploy --only hosting,database`.

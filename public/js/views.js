@@ -4,8 +4,8 @@ import * as X from "./extra.js";
 import { effCourses, eventsOn, evTime, ymd } from "./agenda.js";
 const DAYS = ["Minggu", "Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu"];
 const NAME = { task: "Tugas", class: "Jadwal", scholar: "Beasiswa", cal: "Agenda", event: "Agenda", note: "Catatan" };
-const NAV = [["home", "Beranda"], ["task", "Tugas"], ["class", "Jadwal"], ["cal", "Kalender"], ["note", "Catatan"], ["scholar", "Beasiswa"], ["ipk", "Nilai"], ["set", "Atur"]];
-const P = { home: '<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>', task: '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
+const NAV = [["home", "Beranda"], ["task", "Tugas"], ["class", "Jadwal"], ["cal", "Kalender"], ["note", "Catatan"], ["scholar", "Beasiswa"], ["ipk", "Nilai"], ["catur", "Catur"], ["set", "Atur"]];
+const P = { catur: '<circle cx="12" cy="6.5" r="3"/><path d="M9.5 11h5M10 11c0 4-1.5 5-2.5 7.5h9C15.500 16 14 15 14 11M6 21h12"/>', home: '<path d="M3 11l9-8 9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>', task: '<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/>',
   class: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
   scholar: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>', note: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
   ipk: '<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>', set: '<path d="M4 7h10M18 7h2M4 17h2M10 17h10"/><circle cx="16" cy="7" r="2"/><circle cx="8" cy="17" r="2"/>',
@@ -19,7 +19,7 @@ const activeCourses = c => effCourses(c.courses, c.me, c.cfg.activeSemester || "
 const by = (c, t) => (t === "class" ? activeCourses(c) : c.items).filter(x => x.type === t && !x.done);
 export const lists = items => [...new Set(["Utama", ...items.filter(x => x.type === "task").map(x => x.list || "Utama")])];
 export function shell(c) {
-  const link = cl => NAV.map(([k, n]) => `<button class="${cl}${k === c.view ? " on" : ""}" data-act="nav" data-v="${k}" aria-label="${n}">${ic(k)}<span>${n}</span></button>`).join("");
+  const link = cl => NAV.map(([k, n]) => `<button class="${cl}${k === c.view ? " on" : ""}" data-act="${k === "catur" ? "catur" : "nav"}" data-v="${k}" aria-label="${n}">${ic(k)}<span>${n}</span></button>`).join("");
   const body = c.view === "home" ? home(c) : c.view === "set" ? settings(c) : c.view === "cal" ? cal(c) : c.view === "class" ? schedule(c) : c.view === "note" ? X.notes(c) : c.view === "ipk" ? G.ipk(c) : listPage(c);
   const add = NAME[c.view] && c.view !== "class" ? `<button class="btn" data-act="add" data-t="${c.view === "cal" ? "event" : c.view}">${ic("plus")}<span>${c.view === "note" ? "Catatan baru" : c.view === "cal" ? "Agenda" : "Tambah"}</span></button>` : "";
   return `<header class="top"><div class="brand"><span class="logo">K</span>KampusPing</div><nav class="nv">${link("nl")}</nav><div class="actions"><button class="ib" data-act="theme" aria-label="Ganti tema">${ic("theme")}</button>${add}</div></header>${c.slow && !c.conn ? '<div class="banner">Belum terhubung ke database. Perubahan akan tersimpan saat tersambung. <a href="cek.html">Periksa koneksi</a></div>' : ""}
@@ -45,8 +45,10 @@ function home(c) {
   <div class="card s2"><h3>Beban minggu ini</h3><div class="ring"><svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="44" class="rg"/><circle cx="50" cy="50" r="44" class="rv" style="stroke:${lv[1]};stroke-dasharray:${(Math.min(load / 12, 1) * C).toFixed(1)} ${C}"/></svg><div><b style="color:${lv[1]}">${lv[0]}</b><small>${wk.length} tugas</small></div></div></div>
   <div class="card s4"><h3>Tugas terdekat</h3>${tasks.slice(0, 4).map(x => `<div class="row2" style="padding:6px 0"><b>${esc(x.title)}</b><small class="muted">${fmt(x)}</small></div>`).join("") || '<p class="muted">Belum ada tugas. Coba kolom tambah cepat di atas.</p>'}</div>
   <div class="card s2"><h3>Radar Beasiswa</h3>${sch ? `<b>${esc(sch.title)}</b><p class="muted">tutup ${fmt(sch)}</p><p class="muted">Berikutnya: ${esc(sch.step || "lengkapi berkas")}</p>` : '<p class="muted">Belum ada beasiswa yang dipantau.</p>'}</div>
-  ${rekap(c)}</div>`;
+  ${chessCard(c)}${rekap(c)}</div>`;
 }
+const chessCard = c => { const ch = c.me.chess, r = ch?.r || 1000, n = ch ? (String(ch.lv || "").match(/[12]/g) || []).length : 0;
+  return `<div class="card s6 chessc"><div class="grow"><h3>♟ Teka-Teki Catur</h3><p class="muted">${ch ? `${X.chessTitle(r)} · skor ${r} · ${n} dari 1000 level selesai` : "1000 level teka-teki catur dengan skor dan peringkat antar pengguna."}</p></div><button class="btn" data-act="catur">${ch ? "Lanjut main" : "Mulai main"}</button></div>`; };
 function cal(c) {
   const W = new Date(Date.now() + 252e5), base = new Date(Date.UTC(W.getUTCFullYear(), W.getUTCMonth() + (c.calOff || 0), 1)), y = base.getUTCFullYear(), m = base.getUTCMonth(), p = n => String(n).padStart(2, "0");
   const dim = new Date(Date.UTC(y, m + 1, 0)).getUTCDate(), today = W.toISOString().slice(0, 10), sel = c.calSel || today, ev = {}, wd = new Set(activeCourses(c).map(x => x.day));
@@ -164,14 +166,4 @@ export function form(t, x, id, ls = []) {
     scholar: f("Nama beasiswa", "title", x.title, "required") + f("Tanggal penutupan", "when", x.when, 'type="datetime-local" required') + f("Berkas berikutnya yang disiapkan", "step", x.step) }[t];
   return `<form data-t="${t}" data-id="${id || ""}"><h2>${id ? "Ubah" : "Tambah"} ${NAME[t].toLowerCase()}</h2>${F}<div class="actions"><button class="btn ghost" value="cancel" formnovalidate>Batal</button><button class="btn" value="save">Simpan</button></div></form>`;
 }
-function settings(c) {
-  const p = c.me.prefs || {}, on = k => p[k] !== false ? "checked" : "", sw = (k, l) => `<label class="sw"><input type="checkbox" data-pref="${k}" ${on(k)}>${l}</label>`;
-  const pm = { granted: "Diizinkan", denied: "Diblokir", default: "Belum diizinkan", unsupported: "Tidak didukung" }[c.perm] || "Belum diizinkan";
-  return `<div class="stack">${X.appearance(c)}${X.siakadSettings(c)}<div class="card stack"><h3>Notifikasi di perangkat ini</h3><div class="row2"><span>Izin notifikasi</span><span class="badge ${c.perm === "granted" ? "ok" : c.perm === "denied" ? "bad" : ""}">${pm}</span></div>
-  <div class="actions" style="justify-content:flex-start">${c.perm === "granted" ? '<button class="btn ghost" data-act="pushTest">Kirim notifikasi uji</button>' : c.perm === "denied" ? "" : '<button class="btn" data-act="push">Aktifkan notifikasi</button>'}</div>
-  <p class="muted" style="font-size:13px">${c.perm === "denied" ? "Notifikasi diblokir. Buka Pengaturan HP, Aplikasi, KampusPing, Notifikasi, lalu izinkan." : "Di aplikasi Android: pastikan Notifikasi KampusPing aktif di Pengaturan HP dan penghemat baterai tidak membatasi aplikasi. Telegram (di bawah) tetap menjadi cadangan."}</p></div><div class="card stack"><h3>Kanal Telegram</h3><label>Telegram Chat ID (opsional)<input id="chat" value="${esc(c.me.tgChatId || "")}" placeholder="mis. 123456789" maxlength="20"></label>
-  <div class="actions" style="justify-content:flex-start"><button class="btn" data-act="saveChat">Simpan Chat ID</button></div></div>
-  <div class="card stack"><h3>Jenis pengingat</h3>${sw("task", "Tugas (H-7, H-3, H-1, 3 jam)")}${sw("class", "Kuliah (30 menit sebelum)")}${sw("scholar", "Beasiswa (H-14 sampai H-1)")}${sw("event", "Agenda kalender (sesuai pengingat tiap agenda)")}${sw("report", "Ringkasan pagi dan laporan malam")}</div>
-  <div class="card stack"><h3>Cadangan data</h3><p class="muted">Simpan salinan datamu, atau pulihkan di perangkat baru.</p><div class="actions" style="justify-content:flex-start"><button class="btn ghost" data-act="export">Ekspor</button><label class="btn ghost" style="cursor:pointer">Impor<input type="file" accept="application/json" data-import="1" hidden></label></div></div>
-  ${c.canInstall ? '<div class="card stack"><h3>Pasang di HP</h3><p class="muted">Pasang KampusPing seperti aplikasi, tanpa Play Store.</p><button class="btn" data-act="install">Pasang aplikasi</button></div>' : ""}<div class="card stack"><h3>Kode sinkron</h3><p class="muted">Tanpa login, datamu terikat ke kode ini. Masukkan kode yang sama di perangkat lain untuk memakai data yang sama. Jangan dibagikan: siapa pun yang punya kode bisa melihat dan mengubah datamu.</p><label>Kode perangkat ini<input id="key" readonly value="${esc(c.user.uid)}"></label><div class="actions" style="justify-content:flex-start"><button class="btn ghost" data-act="copyKey">Salin kode</button></div><label>Pakai kode dari perangkat lain<input id="newkey" maxlength="64" placeholder="Tempel kode di sini" autocomplete="off"></label><button class="btn ghost" data-act="useKey">Gunakan kode ini</button></div></div>`;
-}
+const settings = c => X.settingsPage(c);

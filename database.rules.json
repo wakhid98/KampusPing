@@ -242,7 +242,7 @@
        ".validate": "newData.isString() && newData.val().length <= 30"
       },
       "color": {
-       ".validate": "newData.isString() && newData.val().matches(/^(|y|g|b|p|v)$/)"
+       ".validate": "newData.isString() && newData.val().length <= 1 && (newData.val() === '' || newData.val() === 'y' || newData.val() === 'g' || newData.val() === 'b' || newData.val() === 'p' || newData.val() === 'v')"
       },
       "pin": {
        ".validate": "newData.isBoolean()"
@@ -282,6 +282,53 @@
      },
      "fs": {
       ".validate": "newData.isNumber() && newData.val() >= 12 && newData.val() <= 20"
+     },
+     "bg": {
+      ".validate": "newData.isString() && newData.val().length <= 12"
+     },
+     "mas": {
+      ".validate": "newData.isString() && newData.val().length <= 12"
+     },
+     "bgDim": {
+      ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 80"
+     },
+     "bgBlur": {
+      ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 16"
+     },
+     "cardOp": {
+      ".validate": "newData.isNumber() && newData.val() >= 40 && newData.val() <= 100"
+     },
+     "masPos": {
+      ".validate": "newData.val() === 'r' || newData.val() === 'l'"
+     },
+     "masSize": {
+      ".validate": "newData.isNumber() && newData.val() >= 60 && newData.val() <= 320"
+     },
+     "masOp": {
+      ".validate": "newData.isNumber() && newData.val() >= 20 && newData.val() <= 100"
+     },
+     "$o": {
+      ".validate": false
+     }
+    },
+    "chess": {
+     "name": {
+      ".validate": "newData.isString() && newData.val().length <= 20"
+     },
+     "r": {
+      ".validate": "newData.isNumber() && newData.val() >= 100 && newData.val() <= 4000"
+     },
+     "cur": {
+      ".validate": "newData.isNumber() && newData.val() >= 1 && newData.val() <= 1000"
+     },
+     "h": {
+      ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 100000"
+     },
+     "t": {
+      ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99999999999999"
+     },
+     "lv": {
+      ".validate": "newData.isString() && newData.val().length <= 1000 && newData.val().matches(/^[0-3]*$/)"
      },
      "$o": {
       ".validate": false
@@ -420,6 +467,31 @@
     },
     "order": {
      ".validate": "newData.isNumber()"
+    },
+    "$o": {
+     ".validate": false
+    }
+   }
+  },
+  "rank": {
+   ".read": true,
+   ".indexOn": [
+    "rating"
+   ],
+   "$pid": {
+    ".write": "$pid.matches(/^[a-f0-9]{32}$/)",
+    ".validate": "newData.hasChildren(['name','rating','solved'])",
+    "name": {
+     ".validate": "newData.isString() && newData.val().length >= 1 && newData.val().length <= 20"
+    },
+    "rating": {
+     ".validate": "newData.isNumber() && newData.val() >= 100 && newData.val() <= 4000"
+    },
+    "solved": {
+     ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 1000"
+    },
+    "t": {
+     ".validate": "newData.isNumber() && newData.val() >= 0 && newData.val() <= 99999999999999"
     },
     "$o": {
      ".validate": false

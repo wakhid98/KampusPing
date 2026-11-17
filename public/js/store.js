@@ -16,7 +16,7 @@ export function deviceKey() {
 }
 export const setDeviceKey = k => { if (!KEY_RE.test(k)) return false; try { localStorage.setItem("kp-key", k); return true; } catch { return false; } };
 async function rq(m, p, body) {
-  const ac = new AbortController(), url = `${cfg.databaseURL}/${p.split("/").map(encodeURIComponent).join("/")}.json`;
+  const [pp, qs] = p.split("?"), ac = new AbortController(), url = `${cfg.databaseURL}/${pp.split("/").map(encodeURIComponent).join("/")}.json${qs ? "?" + qs : ""}`;
   const lim = new Promise((_, no) => setTimeout(() => { ac.abort(); no(Object.assign(new Error("Waktu habis"), { code: "TIMEOUT" })); }, 10000));
   const r = await Promise.race([fetch(url, { method: m, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store", signal: ac.signal }), lim]);
   if (!r.ok) throw Object.assign(new Error("HTTP " + r.status), { code: r.status === 401 || r.status === 403 ? "PERMISSION_DENIED" : "HTTP_" + r.status });
@@ -53,9 +53,11 @@ export const delItem = (u, id) => op("DELETE", `items/${u}/${id}`);
 export const patchItem = (u, id, x) => put(`items/${u}/${id}`, x);
 const flat = (o, p = "", out = {}) => { for (const [k, v] of Object.entries(o)) v && typeof v === "object" && !Array.isArray(v) ? flat(v, p + k + "/", out) : out[p + k] = v; return out; };
 export const patchMe = (u, x) => put(`users/${u}`, flat(x));
+export const raw = rq; // akses langsung tanpa pesan galat otomatis (dipakai game catur)
+export const putQuiet = async (p, v) => { const r = await rq(v === null ? "DELETE" : "PUT", p, v === null ? undefined : v); kick(); return r; };
 export const setMe = (u, p, v) => op(v === null ? "DELETE" : "PUT", `users/${u}/${p}`, v === null ? undefined : v);
 export const addToken = (u, t) => op("PUT", `users/${u}/fcm/${t}`, true);
-const OK = ["streak", "best", "lastDone", "lastNote", "prefs", "grades", "attend", "tgChatId", "notes", "co", "cx", "siakad", "ui"];
+const OK = ["streak", "best", "lastDone", "lastNote", "prefs", "grades", "attend", "tgChatId", "notes", "co", "cx", "siakad", "ui", "chess"];
 export const restore = (u, d) => { // impor disaring: hanya kolom yang dikenal
   const items = {}; for (const [id, x] of Object.entries(d.items || {})) if (x && ["task", "scholar", "event"].includes(x.type) && typeof x.title === "string" && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(x.when || ""))
     items[id.replace(/[.$#[\]/]/g, "_").slice(0, 40)] = { type: x.type, title: x.title.slice(0, 120), course: String(x.course || "").slice(0, 80), when: x.when, weight: Math.min(3, Math.max(1, +x.weight || 1)), step: String(x.step || "").slice(0, 200), done: !!x.done, list: String(x.list || "Utama").slice(0, 40), star: !!x.star, note: String(x.note || "").slice(0, 500), repeat: ["daily", "weekly", "monthly", "yearly"].includes(x.repeat) ? x.repeat : "", ...(x.type === "event" ? { allDay: !!x.allDay, end: /^\d{2}:\d{2}$/.test(x.end || "") ? x.end : "", place: String(x.place || "").slice(0, 80), remind: Math.min(1440, Math.max(-1, +x.remind || 0)) } : {}) };

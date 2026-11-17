@@ -16,10 +16,12 @@ T.apply(ui);
 const setUi = o => { ui = T.apply({ ...ui, ...o }); T.save(ui); uiAt = Date.now(); S.setMe(user.uid, "ui", ui).catch(() => {}); refresh(); };
 matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => { if (ui.mode === "auto") { T.apply(ui); refresh(); } });
 const seenWelcome = () => { try { return localStorage.getItem("kp-welcome"); } catch { return 1; } };
-const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, calOff, calSel, conn, slow, scholars, smeta, canInstall: !!installEv, perm: perm(), isApp: isApp(), sems, semSel, schDay, ui, noteSel, noteQ, noteCat, noteSort });
+const ctx = () => ({ user, me, items, courses, cfg, q, flt, lst, view, calOff, calSel, conn, slow, scholars, smeta, canInstall: !!installEv, perm: perm(), isApp: isApp(), sems, semSel, schDay, ui, noteSel, noteQ, noteCat, noteSort, notesBlocked });
 const render = () => { root.innerHTML = V.shell(ctx()); };
 const editing = () => view === "note" && document.activeElement?.dataset?.note;
-const refresh = () => { if (!dlg.open && !editing()) keepForm(root, render); };
+let sheetK = "";
+const openSheet = k => { sheetK = k; dlg.innerHTML = X.sheet(k, ctx()); if (!dlg.open) dlg.showModal(); };
+const refresh = () => { if (dlg.open) { if (sheetK) keepForm(dlg, () => { dlg.innerHTML = X.sheet(sheetK, ctx()); }); return; } if (!editing()) keepForm(root, render); };
 let installEv = null;
 window.addEventListener("beforeinstallprompt", e => { e.preventDefault(); installEv = e; refresh(); });
 if ("serviceWorker" in navigator) navigator.serviceWorker.register("firebase-messaging-sw.js").catch(() => { /* tanpa service worker, web tetap jalan */ });
@@ -53,17 +55,33 @@ async function testPush() {
 const nid = () => "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 let nTimer = 0;
 const redrawList = () => { const l = $("#nlist"); if (l) l.innerHTML = X.noteList(ctx()); };
+// Catatan disimpan ke database; bila database menolak/gagal, salinan aman di perangkat dan dicoba lagi otomatis.
+let pend = null, notesBlocked = false, flushing = false;
+const PK = () => "kp-pn-" + user.uid.slice(0, 16);
+const pendLoad = () => { if (!pend) { try { pend = JSON.parse(localStorage.getItem(PK()) || "{}") || {}; } catch { pend = {}; } } return pend; };
+const pendSave = () => { try { localStorage.setItem(PK(), JSON.stringify(pend)); } catch { /* penyimpanan dinonaktifkan */ } };
+const mergeNotes = n => { const m = { ...(n || {}) }; for (const [id, v] of Object.entries(pendLoad())) { if (v === null) delete m[id]; else m[id] = v; } return m; };
+const cleanNote = n => ({ title: String(n.title || "").slice(0, 100), body: String(n.body || "").slice(0, 10000), cat: String(n.cat || "").slice(0, 30), color: /^[ygbpv]$/.test(n.color) ? n.color : "", pin: !!n.pin, arch: !!n.arch, c: +n.c || Date.now(), t: +n.t || Date.now() });
+async function flushNotes() {
+  if (flushing) return; flushing = true;
+  try {
+    for (const [id, v] of Object.entries(pendLoad())) {
+      try { await S.putQuiet(`users/${user.uid}/notes/${id}`, v); delete pend[id]; pendSave(); if (notesBlocked) { notesBlocked = false; refresh(); } }
+      catch (e) { const bl = e?.code === "PERMISSION_DENIED"; if (bl !== notesBlocked) { notesBlocked = bl; refresh(); } break; }
+    }
+  } finally { flushing = false; }
+}
+const syncNote = id => { pendLoad()[id] = me.notes?.[id] ? cleanNote(me.notes[id]) : null; pendSave(); flushNotes(); };
 async function saveNote() {
   clearTimeout(nTimer); const id = noteSel, el = $("#nt-body"); if (!id || !me.notes?.[id] || !el) return;
   const v = { title: $("#nt-title").value.trim().slice(0, 100), cat: $("#nt-cat").value.trim().slice(0, 30), body: el.value.slice(0, 10000) }, o = me.notes[id];
   if (v.title === (o.title || "") && v.cat === (o.cat || "") && v.body === (o.body || "")) return;
-  v.t = Date.now(); me.notes = { ...me.notes, [id]: { ...o, ...v } }; redrawList();
-  try { await S.patchMe(user.uid, { notes: { [id]: v } }); } catch { /* pesan galat sudah ditampilkan */ }
+  me.notes = { ...me.notes, [id]: { ...o, ...v, t: Date.now() } }; redrawList(); syncNote(id);
 }
-const patchNote = f => { const id = noteSel; if (!id || !me.notes?.[id]) return; me.notes = { ...me.notes, [id]: { ...me.notes[id], ...f } }; S.patchMe(user.uid, { notes: { [id]: f } }); keepForm(root, render); };
+const patchNote = f => { const id = noteSel; if (!id || !me.notes?.[id]) return; me.notes = { ...me.notes, [id]: { ...me.notes[id], ...f } }; syncNote(id); keepForm(root, render); };
 function newNote() {
   saveNote(); const id = nid(), now = Date.now(), n = { title: "", body: "", cat: noteCat && !noteCat.startsWith("*") ? noteCat : "", color: "", pin: noteCat === "*pin", arch: false, c: now, t: now };
-  if (noteCat === "*arch") noteCat = "*all"; me.notes = { ...(me.notes || {}), [id]: n }; noteSel = id; render(); S.setMe(user.uid, `notes/${id}`, n); $("#nt-title")?.focus();
+  if (noteCat === "*arch") noteCat = "*all"; me.notes = { ...(me.notes || {}), [id]: n }; noteSel = id; render(); syncNote(id); $("#nt-title")?.focus();
 }
 const shown = new Set();
 async function remind() { // pengingat agenda saat aplikasi terbuka; server (notify.js) mengirim saat aplikasi tertutup
@@ -82,6 +100,7 @@ async function remind() { // pengingat agenda saat aplikasi terbuka; server (not
 }
 setInterval(() => { if (!document.hidden) remind(); }, 30000);
 document.addEventListener("click", async e => {
+  if (e.target === dlg && sheetK) return dlg.close();
   const b = e.target.closest("[data-act]"); if (!b) return;
   const d = b.dataset, id = d.id;
   switch (d.act) {
@@ -106,7 +125,7 @@ document.addEventListener("click", async e => {
     case "sub": S.patchItem(user.uid, id, { [`subs/${d.k}/d`]: !find(id).subs?.[d.k]?.d }); break;
     case "del": { const data = { ...find(id) }; delete data.id; await S.delItem(user.uid, id); say("Item dihapus.", () => S.setItem(user.uid, id, data)); break; }
     case "undo": toast.className = ""; undo?.(); break;
-    case "saveChat": { const v = $("#chat").value.trim(); if (v && !/^-?\d{5,20}$/.test(v)) return say("Chat ID harus berupa angka."); await S.patchMe(user.uid, { tgChatId: v }); me.tgChatId = v; say("Chat ID tersimpan."); break; }
+    case "saveChat": { const v = $("#chat").value.trim(); if (v && !/^-?\d{5,20}$/.test(v)) return say("Chat ID harus berupa angka."); await S.patchMe(user.uid, { tgChatId: v }); me.tgChatId = v; say("Chat ID tersimpan."); if (sheetK) dlg.close(); else refresh(); break; }
     case "push": enablePush(false).catch(err => say(err.message)); break;
     case "pushTest": testPush().then(() => say("Notifikasi uji dikirim ke perangkat ini.")).catch(err => say(err.message)); break;
     case "clearDone": { const n = items.filter(x => x.done); if (!n.length) say("Tidak ada item selesai."); else if (confirm(`Hapus ${n.length} item yang sudah selesai? Ini tidak bisa diurungkan.`)) { await Promise.all(n.map(x => S.delItem(user.uid, x.id))); say(`${n.length} item dihapus.`); } break; }
@@ -121,6 +140,14 @@ document.addEventListener("click", async e => {
     case "calDay": calSel = d.d; render(); break;
     case "theme": setUi({ mode: document.documentElement.dataset.theme === "dark" ? "light" : "dark" }); break;
     case "export": { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify({ v: 1, me, items: Object.fromEntries(items.map(({ id: i, ...x }) => [i, x])) })], { type: "application/json" })); a.download = "kampusping-cadangan.json"; a.click(); break; }
+    case "sheet": openSheet(d.k); break;
+    case "sheetClose": dlg.close(); break;
+    case "catur": location.href = "catur.html"; break;
+    case "uiBg": setUi({ bg: d.k }); break;
+    case "uiMas": setUi({ mas: d.k }); break;
+    case "uiMasPos": setUi({ masPos: d.v }); break;
+    case "uiBgDel": T.setImg("bg", ""); setUi(ui.bg === "u" ? { bg: "" } : {}); break;
+    case "uiMasDel": T.setImg("mas", ""); setUi(ui.mas === "u" ? { mas: "" } : {}); break;
     case "uiMode": setUi({ mode: d.k }); break;
     case "uiBgL": setUi({ bgL: d.k }); break;
     case "uiBgD": setUi({ bgD: d.k }); break;
@@ -128,8 +155,8 @@ document.addEventListener("click", async e => {
     case "uiR": setUi({ r: +d.v }); break;
     case "uiFs": setUi({ fs: +d.v }); break;
     case "uiReset": setUi({ ...T.DEF }); say("Tema dikembalikan ke bawaan."); break;
-    case "saveSiakad": { const v = $("#siakad").value.trim(); if (v && !/^https:\/\//.test(v)) return say("Alamat harus diawali https://"); await S.setMe(user.uid, "siakad", v ? v.slice(0, 300) : null); me.siakad = v; say(v ? "Alamat SIAKAD-mu disimpan." : "Memakai alamat bawaan admin."); refresh(); break; }
-    case "resetSiakad": await S.setMe(user.uid, "siakad", null); delete me.siakad; say("Memakai alamat bawaan admin."); refresh(); break;
+    case "saveSiakad": { const v = $("#siakad").value.trim(); if (v && !/^https:\/\//.test(v)) return say("Alamat harus diawali https://"); await S.setMe(user.uid, "siakad", v ? v.slice(0, 300) : null); me.siakad = v; say(v ? "Alamat SIAKAD-mu disimpan." : "Memakai alamat bawaan admin."); if (sheetK) dlg.close(); else refresh(); break; }
+    case "resetSiakad": await S.setMe(user.uid, "siakad", null); delete me.siakad; say("Memakai alamat bawaan admin."); if (sheetK) dlg.close(); else refresh(); break;
     case "clsAdd": dlg.innerHTML = V.form("cls", { day: new Date(Date.now() + 252e5).getUTCDay() }, ""); dlg.showModal(); break;
     case "clsEdit": { const x = findCls(id); if (!x) return; dlg.innerHTML = V.form("cls", x, id); dlg.showModal(); break; }
     case "clsReset": if (confirm("Kembalikan semua perubahan pada jadwal admin (termasuk yang disembunyikan)? Jadwal pribadi yang kamu tambah tetap ada.")) { await S.setMe(user.uid, "co", null); delete me.co; say("Jadwal admin dikembalikan."); refresh(); } break;
@@ -139,9 +166,9 @@ document.addEventListener("click", async e => {
     case "noteCat": saveNote(); noteCat = d.k; noteSel = ""; render(); break;
     case "notePin": patchNote({ pin: !me.notes?.[noteSel]?.pin }); break;
     case "noteColor": patchNote({ color: d.k }); break;
-    case "noteArch": { const n = me.notes?.[noteSel]; if (!n) return; const k = noteSel, to = !n.arch; await saveNote(); patchNote({ arch: to }); if (to && noteCat !== "*arch") { noteSel = ""; render(); } say(to ? "Diarsipkan." : "Dikeluarkan dari arsip.", () => S.patchMe(user.uid, { notes: { [k]: { arch: !to } } })); break; }
+    case "noteArch": { const n = me.notes?.[noteSel]; if (!n) return; const k = noteSel, to = !n.arch; await saveNote(); patchNote({ arch: to }); if (to && noteCat !== "*arch") { noteSel = ""; render(); } say(to ? "Diarsipkan." : "Dikeluarkan dari arsip.", () => { me.notes = { ...me.notes, [k]: { ...me.notes[k], arch: !to } }; syncNote(k); refresh(); }); break; }
     case "noteCopy": { const n = me.notes?.[noteSel]; if (n) navigator.clipboard?.writeText(`${$("#nt-title")?.value || n.title}\n\n${$("#nt-body")?.value ?? n.body}`).then(() => say("Catatan disalin.")).catch(() => say("Gagal menyalin.")); break; }
-    case "noteDel": { const k = noteSel, n = me.notes?.[k]; if (!n) return; clearTimeout(nTimer); const data = { ...n }; const m = { ...me.notes }; delete m[k]; me.notes = m; noteSel = ""; render(); await S.setMe(user.uid, `notes/${k}`, null); say("Catatan dihapus.", () => S.setMe(user.uid, `notes/${k}`, data)); break; }
+    case "noteDel": { const k = noteSel, n = me.notes?.[k]; if (!n) return; clearTimeout(nTimer); const data = { ...n }; const m = { ...me.notes }; delete m[k]; me.notes = m; noteSel = ""; render(); syncNote(k); say("Catatan dihapus.", () => { me.notes = { ...me.notes, [k]: data }; syncNote(k); refresh(); }); break; }
     case "noteExport": { const t = X.noteArr(me).sort((a, b) => (b.t || 0) - (a.t || 0)).map(n => `# ${n.title || "Tanpa judul"}${n.cat ? "  [" + n.cat + "]" : ""}${n.arch ? "  (arsip)" : ""}\n${n.body || ""}\n`).join("\n----------------\n\n"); const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([t || "Belum ada catatan."], { type: "text/plain" })); a.download = "kampusping-catatan.txt"; a.click(); break; }
     case "gAdd": me.grades = [...(me.grades || []), { name: "", sks: 2, nilai: "A", smt: +d.s || 1 }]; S.patchMe(user.uid, { grades: me.grades }); render(); break;
     case "gSem": { const next = Math.max(0, ...(me.grades || []).map(x => x.smt || 1)) + 1; if (next > 14) return say("Maksimal 14 semester."); me.grades = [...(me.grades || []), { name: "", sks: 2, nilai: "A", smt: next }]; S.patchMe(user.uid, { grades: me.grades }); render(); break; }
@@ -150,6 +177,7 @@ document.addEventListener("click", async e => {
 });
 document.addEventListener("input", e => {
   const t = e.target;
+  if (t.dataset?.ui && t.type === "range") { ui = T.apply({ ...ui, [t.dataset.ui]: +t.value }); const em = t.parentElement.querySelector("em"); if (em) em.textContent = t.value; }
   if (t.id === "q") { q = t.value; $("#rows").innerHTML = V.rows(ctx()); }
   if (t.id === "nq") { noteQ = t.value; redrawList(); }
   if (t.dataset?.note) { clearTimeout(nTimer); nTimer = setTimeout(saveNote, 700); const b = $("#nt-body"), c = $("#nt-count"); if (b && c) c.textContent = `${(b.value.trim().match(/\S+/g) || []).length} kata · ${b.value.length}/10000 karakter · menyimpan...`; }
@@ -159,7 +187,8 @@ document.addEventListener("keydown", e => { if ((e.key === "Enter" || e.key === 
 document.addEventListener("change", e => {
   const t = e.target.dataset;
   if (e.target.id === "nsort") { noteSort = e.target.value; redrawList(); }
-  if (t.ui === "acc") setUi({ acc: e.target.value });
+  if (t.ui) setUi({ [t.ui]: e.target.type === "range" ? +e.target.value : e.target.value });
+  if (t.up) { const f = e.target.files[0], k = t.up; e.target.value = ""; if (f) T.fileToData(f, k).then(u => { if (!T.setImg(k, u)) throw new Error("Penyimpanan perangkat penuh. Hapus gambar lain dulu."); setUi(k === "bg" ? { bg: "u" } : { mas: "u" }); say("Gambar dipasang."); }).catch(err => say(err.message)); }
   if (t.pref) prefs({ [t.pref]: e.target.checked }).then(() => say("Pengaturan disimpan."));
   if (t.import) { const f = e.target.files[0]; if (f) f.text().then(x => S.restore(user.uid, JSON.parse(x))).then(() => say("Data dipulihkan.")).catch(() => say("File cadangan tidak valid.")); }
   if (t.g) { const [i, k] = t.g.split("."), g = [...(me.grades || [])]; g[i] = { ...g[i], [k]: k === "sks" ? +e.target.value : e.target.value }; me.grades = g; S.patchMe(user.uid, { grades: g }); refresh(); }
@@ -196,6 +225,7 @@ async function saveCls(f, how) {
     dlg.close(); say(how === "reset" ? "Dikembalikan ke jadwal admin." : how === "del" ? (x.own ? "Jadwal dihapus." : "Kelas disembunyikan. Pulihkan lewat Kembalikan jadwal admin.") : "Jadwal tersimpan.");
   } catch { say("Gagal menyimpan jadwal."); }
 }
+dlg.addEventListener("close", () => { sheetK = ""; setTimeout(refresh, 0); });
 dlg.addEventListener("submit", async e => {
   e.preventDefault(); if (e.submitter?.value === "cancel") return dlg.close();
   if (e.target.dataset.t === "cls") return saveCls(e.target, e.submitter?.value);
@@ -214,7 +244,7 @@ dlg.addEventListener("submit", async e => {
 setInterval(() => { if (user && !document.hidden && $("#rows") && !dlg.open) $("#rows").innerHTML = V.rows(ctx()); }, 60000);
 S.setDbErr(e => say(e?.code === "PERMISSION_DENIED" || /permission/i.test(e?.message || "") ? "Ditolak oleh aturan database. Jalankan: firebase deploy --only database" : "Koneksi ke database bermasalah. Periksa internet."));
 setTimeout(() => { if (!conn) { slow = true; refresh(); } }, 4000);
-S.watchMe(user.uid, v => { me = v || {}; if (me.ui && Date.now() - uiAt > 5000) { const n = T.clean(me.ui); if (JSON.stringify(n) !== JSON.stringify(ui)) { ui = T.apply(n); T.save(ui); } } refresh(); });
+S.watchMe(user.uid, v => { me = v || {}; me.notes = mergeNotes(me.notes); if (Object.keys(pendLoad()).length) flushNotes(); if (me.ui && Date.now() - uiAt > 5000) { const n = T.clean(me.ui); if (JSON.stringify(n) !== JSON.stringify(ui)) { ui = T.apply(n); T.save(ui); } } refresh(); });
 S.watchConn(v => { conn = v; refresh(); });
 S.watchCourses(a => { courses = a; refresh(); });
 S.watchCfg(c => { cfg = c; refresh(); });
